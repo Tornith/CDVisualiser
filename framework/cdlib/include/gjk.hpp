@@ -9,30 +9,28 @@
 
 #include "collider.hpp"
 #include "collision_data.hpp"
+#include "collision_detector.hpp"
 
 namespace cdlib {
-    class GJK {
+    class GJKCollisionDetector : public CollisionDetector {
     protected:
         std::vector<glm::vec3> simplex;
         glm::vec3 direction{};
-
-        const Collider* collider_1{};
-        const Collider* collider_2{};
     public:
-        GJK() = default;
+        GJKCollisionDetector() = default;
 
-        GJK(const Collider* collider_1, const Collider* collider_2) : collider_1(collider_1), collider_2(collider_2) {}
+        GJKCollisionDetector(const Collider* collider_1, const Collider* collider_2) : CollisionDetector(collider_1, collider_2) {}
 
-        GJK(const GJK& other) = default;
+        GJKCollisionDetector(const GJKCollisionDetector& other) = default;
 
-        GJK(GJK&& other) noexcept
-            : simplex(std::move(other.simplex)),
-              direction(other.direction),
-              collider_1(other.collider_1),
-              collider_2(other.collider_2) {
+        GJKCollisionDetector(GJKCollisionDetector&& other) noexcept
+            : CollisionDetector(other.collider_1, other.collider_2),
+              simplex(std::move(other.simplex)),
+              direction(other.direction)
+            {
         }
 
-        GJK& operator=(const GJK& other) {
+        GJKCollisionDetector& operator=(const GJKCollisionDetector& other) {
             if (this == &other)
                 return *this;
             simplex = other.simplex;
@@ -42,7 +40,7 @@ namespace cdlib {
             return *this;
         }
 
-        GJK& operator=(GJK&& other) noexcept {
+        GJKCollisionDetector& operator=(GJKCollisionDetector&& other) noexcept {
             if (this == &other)
                 return *this;
             simplex = std::move(other.simplex);
@@ -52,7 +50,7 @@ namespace cdlib {
             return *this;
         }
 
-        virtual ~GJK() = default;
+        ~GJKCollisionDetector() override = default;
 
         virtual bool is_colliding();
 
@@ -70,13 +68,20 @@ namespace cdlib {
         [[nodiscard]] std::pair<glm::vec3, std::optional<long long>> next_direction() const;
 
         bool origin_in_simplex();
+
+        [[nodiscard]] std::optional<CollisionData> get_collision_data() override {
+            if (is_colliding()) {
+                return CollisionData{glm::vec3(0.f), 0.f};
+            }
+            return std::nullopt;
+        }
     public:
         constexpr static int MAX_ITERATIONS = 10000;
     };
 
-    class GJKEPA : public GJK {
+    class GJKEPA : public GJKCollisionDetector {
     public:
-        [[nodiscard]] std::optional<CollisionData> get_collision_data();
+        [[nodiscard]] std::optional<CollisionData> get_collision_data() override;
     };
 
     // Enum, specifying the state of the steppable GJK
@@ -92,7 +97,7 @@ namespace cdlib {
         UNDEFINED
     };
 
-    class SteppableGJK : public GJK {
+    class SteppableGJK : public GJKCollisionDetector {
     protected:
         bool step_by_step_initialized = false;
         bool step_by_step_gjk_finished = false;
@@ -121,7 +126,7 @@ namespace cdlib {
 
     public:
         SteppableGJK() = default;
-        SteppableGJK(const Collider* mesh_1, const Collider* mesh_2) : GJK(mesh_1, mesh_2) {}
+        SteppableGJK(const Collider* mesh_1, const Collider* mesh_2) : GJKCollisionDetector(mesh_1, mesh_2) {}
 
         virtual void iteration_step();
 
@@ -148,6 +153,13 @@ namespace cdlib {
         [[nodiscard]] bool is_colliding() override { return result; }
 
         [[nodiscard]] virtual SteppableGJKState get_current_state() const { return current_state; }
+
+        [[nodiscard]] std::optional<CollisionData> get_collision_data() override {
+            if (result) {
+                return CollisionData{glm::vec3(0.f), 0.f};
+            }
+            return std::nullopt;
+        }
     };
 
     class SteppableGJKEPA : public SteppableGJK {
@@ -168,6 +180,6 @@ namespace cdlib {
         [[nodiscard]] bool get_gjk_finished() const { return step_by_step_gjk_finished; }
         [[nodiscard]] bool get_epa_finished() const { return step_by_step_epa_finished; }
         [[nodiscard]] bool get_finished() const override { return step_by_step_gjk_finished && step_by_step_epa_finished; }
-        [[nodiscard]] std::optional<CollisionData> get_collision_data() const { return collision_data; }
+        [[nodiscard]] std::optional<CollisionData> get_collision_data() override { return collision_data; }
     };
 }

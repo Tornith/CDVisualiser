@@ -5,7 +5,7 @@
 #include "epa.hpp"
 
 namespace cdlib {
-    bool GJK::is_colliding() {
+    bool GJKCollisionDetector::is_colliding() {
         // Reset the simplex
         simplex.clear();
 
@@ -53,7 +53,7 @@ namespace cdlib {
         return false;
     }
 
-    glm::vec3 GJK::get_line_normal(const glm::vec3& a, const glm::vec3& b, const glm::vec3& o) {
+    glm::vec3 GJKCollisionDetector::get_line_normal(const glm::vec3& a, const glm::vec3& b, const glm::vec3& o) {
         // Get a vector, that is perpendicular to the line, and is facing the o point
         glm::vec3 ab = b - a;
         glm::vec3 ao = o - a;
@@ -67,7 +67,7 @@ namespace cdlib {
         return glm::normalize(normal);
     }
 
-    glm::vec3 GJK::get_face_normal(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& o) {
+    glm::vec3 GJKCollisionDetector::get_face_normal(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& o) {
         // The normal of the face is the perpendicular vector to the face, facing the o point
         glm::vec3 ab = b - a;
         glm::vec3 ac = c - a;
@@ -80,7 +80,7 @@ namespace cdlib {
     }
 
 
-    bool GJK::origin_in_simplex() {
+    bool GJKCollisionDetector::origin_in_simplex() {
         // If the simplex is a point, line or triangle we skip
         if (simplex.size() < 4) {
             return false;
@@ -100,7 +100,7 @@ namespace cdlib {
             same_side(simplex[3], simplex[0], simplex[1], simplex[2]);
     }
 
-    float GJK::line_point_distance(const glm::vec3&a, const glm::vec3&b, const glm::vec3&o) {
+    float GJKCollisionDetector::line_point_distance(const glm::vec3&a, const glm::vec3&b, const glm::vec3&o) {
         // Get the normal of the line
         glm::vec3 normal = get_line_normal(a, b, o);
         glm::vec3 ao = o - a;
@@ -108,7 +108,7 @@ namespace cdlib {
         return glm::dot(normal, ao);
     }
 
-    float GJK::triangle_point_distance(const glm::vec3&a, const glm::vec3&b, const glm::vec3&c, const glm::vec3&o) {
+    float GJKCollisionDetector::triangle_point_distance(const glm::vec3&a, const glm::vec3&b, const glm::vec3&c, const glm::vec3&o) {
         // Get the normal of the triangle
         glm::vec3 normal = get_face_normal(a, b, c, o);
         glm::vec3 ao = o - a;
@@ -118,11 +118,11 @@ namespace cdlib {
 
 
     // Sanity check, if we crossed the origin
-    bool GJK::passed_origin(const glm::vec3& normal, const glm::vec3& point) {
+    bool GJKCollisionDetector::passed_origin(const glm::vec3& normal, const glm::vec3& point) {
         return glm::dot(normal, point) >= 0;
     }
 
-    std::pair<glm::vec3, std::optional<long long>> GJK::next_direction() const {
+    std::pair<glm::vec3, std::optional<long long>> GJKCollisionDetector::next_direction() const {
         // If the simplex is a point, return the opposite of the point
         if (simplex.size() == 1) {
             return { -simplex[0], std::nullopt };

@@ -17,6 +17,7 @@ target_include_directories(${module_name} PUBLIC include)
 target_sources(
     ${module_name} 
     PRIVATE
+        include/collision_detector.hpp
         include/collider.hpp
         include/collision_data.hpp
 

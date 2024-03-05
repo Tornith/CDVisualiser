@@ -19,9 +19,11 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
 
 Application::~Application() = default;
 
+
 // ----------------------------------------------------------------------------
-// Shaderes
+// Preparation methods
 // ----------------------------------------------------------------------------
+
 void Application::compile_shaders() {
     default_unlit_program = ShaderProgram(lecture_shaders_path / "object.vert", lecture_shaders_path / "unlit.frag");
     default_lit_program = ShaderProgram(lecture_shaders_path / "object.vert", lecture_shaders_path / "lit.frag");
@@ -29,9 +31,6 @@ void Application::compile_shaders() {
     std::cout << "Shaders are reloaded." << std::endl;
 }
 
-// ----------------------------------------------------------------------------
-// Initialize Scene
-// ----------------------------------------------------------------------------
 void Application::prepare_cameras() {
     // Sets the default camera position.
     camera.set_eye_position(glm::radians(-45.f), glm::radians(20.f), 25.f);
@@ -48,19 +47,6 @@ void Application::prepare_textures() {
 void Application::prepare_lights() {
     // The rest is set in the update scene method.
     phong_lights_ubo.set_global_ambient(glm::vec3(0.0f));
-}
-
-Geometry Application::create_line_geometry(const glm::vec3&from, const glm::vec3&to) {
-    const std::vector vertices = {
-        from.x, from.y, from.z,  0.0f, 0.0f, 0.0f,  0.5f, 0.5f,  0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 0.0f,
-        to.x,   to.y,   to.z,    0.0f, 0.0f, 0.0f,  0.5f, 0.5f,  0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 0.0f
-    };
-    const std::vector<uint32_t> indices = {0, 1};
-    return Geometry{GL_LINES, 14, 2, vertices.data(), 2, indices.data()};
-}
-
-Geometry Application::create_line_geometry(const glm::vec3&origin, const glm::vec3&direction, float length) {
-    return create_line_geometry(origin, origin + glm::normalize(direction) * length);
 }
 
 void Application::prepare_scene() {
@@ -95,6 +81,22 @@ void Application::prepare_convex_objects() {
     scene_objects.push_back(minkowski_difference);
 
     gjk = cdlib::SteppableGJKEPA(convex_mesh_1.get(), convex_mesh_2.get());
+}
+
+
+
+
+Geometry Application::create_line_geometry(const glm::vec3&from, const glm::vec3&to) {
+    const std::vector vertices = {
+        from.x, from.y, from.z,  0.0f, 0.0f, 0.0f,  0.5f, 0.5f,  0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 0.0f,
+        to.x,   to.y,   to.z,    0.0f, 0.0f, 0.0f,  0.5f, 0.5f,  0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 0.0f
+    };
+    const std::vector<uint32_t> indices = {0, 1};
+    return Geometry{GL_LINES, 14, 2, vertices.data(), 2, indices.data()};
+}
+
+Geometry Application::create_line_geometry(const glm::vec3&origin, const glm::vec3&direction, float length) {
+    return create_line_geometry(origin, origin + glm::normalize(direction) * length);
 }
 
 
