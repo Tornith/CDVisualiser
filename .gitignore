@@ -1,0 +1,18 @@
+# Ignore folders beginning with a dot
+.*
+!.gitignore
+
+# Ignore folders beginning with cmake
+/cmake
+/cmake-build*
+
+# Ignore other folders
+/build
+/ext
+
+/courses/PA213/
+/courses/PV227/
+
+/PA213.zip
+/reference_img_final.png
+/reference_img_unlight.png

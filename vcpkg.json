@@ -1,0 +1,33 @@
+{
+  "name" : "main",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "acc3bcf76b84ae5041c86ab55fe138ae7b8255c7",
+  "dependencies" : [ "glfw3", "glad", "glm", {
+    "name" : "imgui",
+    "features" : [ "opengl3-binding", "glfw-binding" ]
+  }, "toml11", "tinyobjloader", "gtest", "lodepng", "stb", {
+    "name" : "glfw3",
+    "version>=" : "3.3.8#2"
+  }, {
+    "name" : "glad",
+    "version>=" : "0.1.36"
+  }, {
+    "name" : "glm",
+    "version>=" : "0.9.9.8#1"
+  }, {
+    "name" : "toml11",
+    "version>=" : "3.7.1"
+  }, {
+    "name" : "tinyobjloader",
+    "version>=" : "2.0.0-rc9"
+  }, {
+    "name" : "gtest",
+    "version>=" : "1.14.0"
+  }, {
+    "name" : "lodepng",
+    "version>=" : "2021-12-04#1"
+  }, {
+    "name" : "stb",
+    "version>=" : "2023-04-11#1"
+  } ]
+}

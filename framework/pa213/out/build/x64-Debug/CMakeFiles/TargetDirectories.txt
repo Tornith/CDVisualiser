@@ -1,0 +1,3 @@
+G:/University/Teaching/ComputerGraphics/CommonFramework/framework/pa213/out/build/x64-Debug/CMakeFiles/FRAMEWORK_PA213.dir
+G:/University/Teaching/ComputerGraphics/CommonFramework/framework/pa213/out/build/x64-Debug/CMakeFiles/edit_cache.dir
+G:/University/Teaching/ComputerGraphics/CommonFramework/framework/pa213/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir
