@@ -40,9 +40,7 @@ void Application::prepare_cameras() {
     camera_ubo.update_opengl_data();
 }
 
-void Application::prepare_textures() {
-
-}
+void Application::prepare_textures() {}
 
 void Application::prepare_lights() {
     // The rest is set in the update scene method.
@@ -52,108 +50,106 @@ void Application::prepare_lights() {
 void Application::prepare_scene() {
     prepare_convex_objects();
 
+    // TODO: Remove this later
+    gjk = cdlib::SteppableGJKEPA(object_1->collider, object_2->collider);
+
     world_axis_x = SceneObject{create_line_geometry(glm::vec3(-1000.0f, 0.0f, 0.0f), glm::vec3(1000.0f, 0.0f, 0.0f)), ModelUBO(glm::mat4(1.0f)), red_material_ubo};
     world_axis_y = SceneObject{create_line_geometry(glm::vec3(0.0f, -1000.0f, 0.0f), glm::vec3(0.0f, 1000.0f, 0.0f)), ModelUBO(glm::mat4(1.0f)), green_material_ubo};
     world_axis_z = SceneObject{create_line_geometry(glm::vec3(0.0f, 0.0f, -1000.0f), glm::vec3(0.0f, 0.0f, 1000.0f)), ModelUBO(glm::mat4(1.0f)), blue_material_ubo};
 }
 
 void Application::prepare_convex_objects() {
+    convex_objects.clear();
+
+    // Create main objects (which can be moved)
     auto [g1, v1] = generate_convex_hull_geometry(random_points(object_seed_1));
     auto [g2, v2] = generate_convex_hull_geometry(random_points(object_seed_2));
 
-    convex_geometry_1 = std::move(g1);
-    convex_geometry_2 = std::move(g2);
+    auto p1 = get_positions_from_buffer(v1);
+    auto p2 = get_positions_from_buffer(v2);
 
-    scene_objects.clear();
+    auto c1 = std::make_shared<cdlib::ConvexCollider>(p1);
+    auto c2 = std::make_shared<cdlib::ConvexCollider>(p2);
 
-    convex_object_1 = {convex_geometry_1, ModelUBO(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance))), red_material_ubo};
-    convex_object_2 = {convex_geometry_2, ModelUBO(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance))), green_material_ubo};
+    auto m1 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance));
+    auto m2 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance));
 
-    scene_objects.push_back(convex_object_1);
-    scene_objects.push_back(convex_object_2);
+    auto s1 = SceneObject{g1, ModelUBO(m1), red_material_ubo};
+    auto s2 = SceneObject{g2, ModelUBO(m2), green_material_ubo};
 
-    convex_object_vertices_1 = std::move(v1);
-    convex_object_vertices_2 = std::move(v2);
+    auto o1 = ConvexObject{ std::move(v1), m1, c1, s1 };
 
-    recalculate_positions();
-    recalculate_minkowski_difference();
+    auto o2 = ConvexObject{ std::move(v2), m2, c2, s2 };
 
-    scene_objects.push_back(minkowski_difference);
+    object_1 = std::make_shared<ConvexObject>(std::move(o1));
+    object_2 = std::make_shared<ConvexObject>(std::move(o2));
 
-    gjk = cdlib::SteppableGJKEPA(convex_mesh_1.get(), convex_mesh_2.get());
+    convex_objects.push_back(object_1);
+    convex_objects.push_back(object_2);
+
+    // Randomly generate extra objects
+    for (int i = 0; i < extra_object_count; i++) {
+        auto seed = 1000 + i;
+        auto [g, v] = generate_convex_hull_geometry(random_points(seed));
+        auto c = std::make_shared<cdlib::ConvexCollider>(get_positions_from_buffer(v));
+        auto p = pseudorandom_point(seed);
+        auto m = translate(glm::mat4(1.0f), p);
+        auto s = SceneObject{g, ModelUBO(m), white_material_ubo};
+        auto o = ConvexObject{ std::move(v), m, c, s };
+        convex_objects.push_back(std::make_shared<ConvexObject>(std::move(o)));
+    }
 }
 
 
-
-
-Geometry Application::create_line_geometry(const glm::vec3&from, const glm::vec3&to) {
+std::shared_ptr<Geometry> Application::create_line_geometry(const glm::vec3&from, const glm::vec3&to) {
     const std::vector vertices = {
         from.x, from.y, from.z,  0.0f, 0.0f, 0.0f,  0.5f, 0.5f,  0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 0.0f,
         to.x,   to.y,   to.z,    0.0f, 0.0f, 0.0f,  0.5f, 0.5f,  0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 0.0f
     };
     const std::vector<uint32_t> indices = {0, 1};
-    return Geometry{GL_LINES, 14, 2, vertices.data(), 2, indices.data()};
+    return std::make_shared<Geometry>(GL_LINES, 14, 2, vertices.data(), 2, indices.data());
 }
 
-Geometry Application::create_line_geometry(const glm::vec3&origin, const glm::vec3&direction, float length) {
+std::shared_ptr<Geometry> Application::create_line_geometry(const glm::vec3&origin, const glm::vec3&direction, float length) {
     return create_line_geometry(origin, origin + glm::normalize(direction) * length);
 }
 
+glm::vec3 Application::pseudorandom_point(const int seed) {
+    std::mt19937 gen(seed);
+    std::uniform_real_distribution dis(-10.0f, 10.0f);
+    return {dis(gen), dis(gen), dis(gen)};
+}
 
 void Application::recalculate_positions() {
-    // If the convex meshes are not initialized, initialize them
-    if (!convex_mesh_1) {
-        convex_mesh_1 = std::make_shared<ConvexCollider>();
-    }
-    if (!convex_mesh_2) {
-        convex_mesh_2 = std::make_shared<ConvexCollider>();
-    }
+    const auto m1 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance));
+    const auto m2 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance));
 
-    // If the positions are not initialized, initialize them
-    convex_object_positions_1.clear();
-    convex_object_positions_2.clear();
-
-    // Reserve space for the vertices
-    convex_object_positions_1.reserve(convex_object_vertices_1.size() / 14);
-    convex_object_positions_2.reserve(convex_object_vertices_2.size() / 14);
-
-    auto pos_1 =  get_positions_from_buffer(convex_object_vertices_1);
-    auto pos_2 = get_positions_from_buffer(convex_object_vertices_2);
-
-    // Apply the model matrix to the vertices
-    for (auto& pos : pos_1) {
-        convex_object_positions_1.emplace_back(convex_object_1.get_model_ubo().get_matrix() * glm::vec4(pos, 1.0f));
-    }
-    for (auto& pos : pos_2) {
-        convex_object_positions_2.emplace_back((convex_object_2.get_model_ubo().get_matrix() * glm::vec4(pos, 1.0f)));
-    }
-
-    // Set the new positions to the convex meshes
-    convex_mesh_1->set_vertices(convex_object_positions_1);
-    convex_mesh_2->set_vertices(convex_object_positions_2);
+    object_1->set_model_matrix(m1);
+    object_2->set_model_matrix(m2);
 }
 
 void Application::recalculate_minkowski_difference() {
-    minkowski_difference_positions.clear();
-
-    auto pos_minkowski = get_minkowski_difference_positions(convex_object_positions_1, convex_object_positions_2);
-    minkowski_difference_positions.reserve(pos_minkowski.size());
-    for (auto& pos : pos_minkowski) {
-        minkowski_difference_positions.emplace_back(pos);
+    // If the minkowski object pointer is not null, find it in the convex_objects array and remove it
+    if (minkowski_object) {
+        auto it = std::ranges::find_if(convex_objects, [this](const auto& object) {
+            return object.get() == minkowski_object.get();
+        });
+        if (it != std::end(convex_objects)) {
+            convex_objects.erase(it);
+        }
     }
 
-    // Convert from glm::vec3 to std::array<float, 3>
-    std::vector<std::array<float, 3>> minkowski_difference_positions_array;
-    for (const auto& pos : minkowski_difference_positions) {
-        minkowski_difference_positions_array.push_back({pos.x, pos.y, pos.z});
-    }
+    auto pm = get_minkowski_difference_positions(object_1->collider->get_global_vertices(), object_2->collider->get_global_vertices());
+    auto [gm, vm] = generate_convex_hull_geometry(pm);
 
-    // Create the minkowski difference geometry
-    auto [gm, vm] = generate_convex_hull_geometry(minkowski_difference_positions_array);
-    minkowski_difference_geometry = std::move(gm);
-    minkowski_difference_vertices = std::move(vm);
+    auto mm = glm::mat4(1.0f); // The vertices are already in world space
 
-    minkowski_difference = {minkowski_difference_geometry, ModelUBO(glm::mat4(1.0f)), yellow_material_ubo};
+    auto sm = SceneObject{gm, ModelUBO(mm), yellow_material_ubo};
+
+    auto om = ConvexObject{ std::move(vm), mm, nullptr, sm };
+
+    minkowski_object = std::make_shared<ConvexObject>(std::move(om));
+    convex_objects.push_back(minkowski_object);
 }
 
 std::vector<std::array<float, 3>> Application::random_points(int seed) {
@@ -171,7 +167,7 @@ std::vector<std::array<float, 3>> Application::random_points(int seed) {
     return points;
 }
 
-std::pair<Geometry, std::vector<float>> Application::generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points) {
+std::pair<std::shared_ptr<Geometry>, std::vector<float>> Application::generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points) {
     quickhull::QuickHull<float> qh;
 
     // Convert points to std::vector<quickhull::Vector3<float>>
@@ -239,7 +235,15 @@ std::pair<Geometry, std::vector<float>> Application::generate_convex_hull_geomet
         indexBuffer32.push_back(static_cast<uint32_t>(index));
     }
 
-    return {Geometry{GL_TRIANGLES, 14, static_cast<int>(vertices.size() / 14), vertices.data(), static_cast<int>(indexBuffer32.size()), indexBuffer32.data()}, vertices};
+    return {std::make_shared<Geometry>(GL_TRIANGLES, 14, static_cast<int>(vertices.size() / 14), vertices.data(), static_cast<int>(indexBuffer32.size()), indexBuffer32.data()), vertices};
+}
+
+std::pair<std::shared_ptr<Geometry>, std::vector<float>> Application::generate_convex_hull_geometry(const std::vector<glm::vec3>& points) {
+    auto converted = std::vector<std::array<float, 3>>(points.size());
+    for (size_t i = 0; i < points.size(); i++) {
+        converted[i] = {points[i].x, points[i].y, points[i].z};
+    }
+    return generate_convex_hull_geometry(converted);
 }
 
 std::vector<glm::vec3> Application::get_positions_from_buffer(const std::vector<float>& buffer) {
@@ -269,13 +273,7 @@ std::vector<glm::vec3> Application::get_minkowski_difference_positions(const std
     return minkowski_difference;
 }
 
-// AABB tree
 
-
-
-// ----------------------------------------------------------------------------
-// Update
-// ----------------------------------------------------------------------------
 void Application::update(float delta) {
     PV227Application::update(delta);
 
@@ -293,25 +291,15 @@ void Application::update(float delta) {
     phong_lights_ubo.add(PhongLightData::CreateDirectionalLight(light_position, glm::vec3(0.75f), glm::vec3(0.9f), glm::vec3(1.0f)));
     phong_lights_ubo.update_opengl_data();
 
-    if (abs(object_distance - last_object_distance) > 0.0001f) {
+    if (abs(object_distance - last_object_distance) > std::numeric_limits<float>::epsilon()) {
         last_object_distance = object_distance;
-        recalculate_positions();
-        recalculate_minkowski_difference();
+        update_object_positions();
     }
-    update_object_positions(delta);
 }
 
-void Application::update_object_positions(float delta) {
-    convex_object_1.get_model_ubo().set_matrix(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance)));
-    convex_object_2.get_model_ubo().set_matrix(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance)));
-
-    convex_object_1.get_model_ubo().update_opengl_data();
-    convex_object_2.get_model_ubo().update_opengl_data();
-
-    // Remove minkowski difference object and recalculate it
-    scene_objects.pop_back();
+void Application::update_object_positions() {
+    recalculate_positions();
     recalculate_minkowski_difference();
-    scene_objects.push_back(minkowski_difference);
 }
 
 glm::vec3 get_position_from_buffer(std::vector<float> buffer, const size_t index) {
@@ -415,12 +403,20 @@ void Application::render_scene() {
     glCullFace(GL_BACK);
 
     auto render_objects = [this]() {
-        if (show_convex_objects) {
-            render_object(convex_object_1, default_lit_program);
-            render_object(convex_object_2, default_lit_program);
-        }
-        if (selected_method == GJK_EPA && show_minkowski_difference) {
-            render_object(minkowski_difference, default_lit_program);
+        // Iterate over the convex objects and render them
+        for (const auto& object : convex_objects) {
+            // If the object is one of the main objects, check if the show_convex_objects flag is set
+            if ((object == object_1 || object == object_2) && show_convex_objects) {
+                render_object(object->scene_object, default_lit_program);
+            }
+            // If the object is the minowski object, check if the show_minkowski_difference flag is set
+            else if (object == minkowski_object && show_minkowski_difference) {
+                render_object(object->scene_object, default_lit_program);
+            }
+            // If the object is anything else, its an extra object and check if the show_extra_objects flag is set
+            else if (show_extra_objects) {
+                render_object(object->scene_object, default_lit_program);
+            }
         }
     };
 
@@ -531,6 +527,7 @@ void Application::render_ui() {
         last_object_seed_1 = object_seed_1;
         last_object_seed_2 = object_seed_2;
         prepare_convex_objects();
+        gjk = cdlib::SteppableGJKEPA(object_1->collider, object_2->collider);
     }
 
     // Slider for moving the objects closer together

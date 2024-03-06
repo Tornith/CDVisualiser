@@ -1,24 +1,27 @@
 #pragma once
 #include <optional>
+#include <utility>
 
 #include "collider.hpp"
 #include "collision_data.hpp"
 
-// Abstract class for different collision detection methods
-class CollisionDetector {
-protected:
-    const Collider* collider_1{};
-    const Collider* collider_2{};
-public:
-    CollisionDetector() = default;
+namespace cdlib {
+    // Abstract class for different collision detection methods
+    class CollisionDetector {
+    protected:
+        std::shared_ptr<Collider> collider_1{};
+        std::shared_ptr<Collider> collider_2{};
+    public:
+        CollisionDetector() = default;
 
-    CollisionDetector(const Collider* collider_1, const Collider* collider_2)
-        : collider_1(collider_1),
-          collider_2(collider_2) {
-    }
+        CollisionDetector(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2)
+            : collider_1(std::move(collider_1)),
+              collider_2(std::move(collider_2)) {
+        }
 
-    virtual ~CollisionDetector() = default;
+        virtual ~CollisionDetector() = default;
 
-    // Detects collision between two objects
-    [[nodiscard]] virtual std::optional<cdlib::CollisionData> get_collision_data() = 0;
-};
+        // Detects collision between two objects
+        [[nodiscard]] virtual std::optional<CollisionData> get_collision_data() = 0;
+    };
+}

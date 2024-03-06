@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "collider.hpp"
@@ -37,8 +38,8 @@ namespace cdlib {
 
     protected:
         std::vector<glm::vec3> simplex;
-        const Collider* collider_1{};
-        const Collider* collider_2{};
+        std::shared_ptr<Collider> collider_1{};
+        std::shared_ptr<Collider> collider_2{};
 
         std::vector<glm::vec3> polytope;
         std::vector<size_t> faces;
@@ -46,8 +47,8 @@ namespace cdlib {
     public:
         EPA() = default;
 
-        EPA(const Collider* collider_1, const Collider* collider_2, const std::vector<glm::vec3>& simplex)
-            : simplex(simplex), collider_1(collider_1), collider_2(collider_2) {
+        EPA(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2, const std::vector<glm::vec3>& simplex)
+            : simplex(simplex), collider_1(std::move(collider_1)), collider_2(std::move(collider_2)) {
             polytope = simplex;
             faces = {
                 0, 1, 2,
@@ -63,8 +64,8 @@ namespace cdlib {
 
         EPA(EPA&& other) noexcept
             : simplex(std::move(other.simplex)),
-              collider_1(other.collider_1),
-              collider_2(other.collider_2),
+              collider_1(std::move(other.collider_1)),
+              collider_2(std::move(other.collider_2)),
               polytope(std::move(other.polytope)),
               faces(std::move(other.faces)) {
         }

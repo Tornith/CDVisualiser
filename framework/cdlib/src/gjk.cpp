@@ -10,12 +10,12 @@ namespace cdlib {
         simplex.clear();
 
         // Get the first arbitrary direction
-        direction = normalize(collider_1->get_vertices()[0] - collider_2->get_vertices()[0]);
+        direction = normalize(collider_1->get_global_vertex(0) - collider_2->get_global_vertex(0));
 
         for (int i = 0; i < MAX_ITERATIONS; i++) {
             // Get the support points
-            glm::vec3 a = collider_1->support(direction);
-            glm::vec3 b = collider_2->support(-direction);
+            glm::vec3 a = collider_1->global_support(direction);
+            glm::vec3 b = collider_2->global_support(-direction);
 
             // Get the new point
             glm::vec3 new_point = a - b;
@@ -217,15 +217,15 @@ namespace cdlib {
         simplex.clear();
 
         // Get the first arbitrary direction
-        direction = glm::normalize(collider_1->get_vertices()[0] - collider_2->get_vertices()[0]);
+        direction = glm::normalize(collider_1->get_global_vertex(0) - collider_2->get_global_vertex(0));
 
         current_state = SteppableGJKState::ITERATION_1;
     }
 
     void SteppableGJK::iteration_substep_1() {
         // Get the support points
-        current_point_a = collider_1->support(direction);
-        current_point_b = collider_2->support(-direction);
+        current_point_a = collider_1->global_support(direction);
+        current_point_b = collider_2->global_support(-direction);
 
         // Get the new point
         current_new_point = current_point_a - current_point_b;

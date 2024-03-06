@@ -14,7 +14,7 @@ namespace cdlib {
             min_distance = face_normals[min_triangle].distance;
 
             // Get the support point (on the Minkowski difference) in the direction of the normal
-            auto support = collider_1->support(min_normal) - collider_2->support(-min_normal);
+            auto support = collider_1->global_support(min_normal) - collider_2->global_support(-min_normal);
             float distance = dot(min_normal, support);
 
             // Check if the support point is far enough from the current min triangle

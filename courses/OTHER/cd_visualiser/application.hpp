@@ -7,6 +7,10 @@
 
 #include "QuickHull.hpp"
 
+class ColliderAppWrapper {
+    std::unique_ptr<cdlib::CollisionDetector> collision_detector;
+};
+
 enum CollisionDetectionMethod {
     GJK_EPA = 0,
     V_CLIP = 1,
@@ -16,37 +20,24 @@ enum CollisionDetectionMethod {
 
 struct ConvexObject {
     std::vector<float> vertices;
-    std::shared_ptr<ConvexCollider> collider;
+    glm::mat4 model_matrix;
+    std::shared_ptr<cdlib::ConvexCollider> collider;
     SceneObject scene_object;
-    Geometry geometry;
+
+    void set_model_matrix(const glm::mat4& model_matrix) {
+        this->model_matrix = model_matrix;
+        scene_object.get_model_ubo().set_matrix(model_matrix);
+        scene_object.get_model_ubo().update_opengl_data();
+
+        if (collider) {
+            collider->set_transform_matrix(model_matrix);
+        }
+    }
 };
 
 class Application : public PV227Application {
-    // ----------------------------------------------------------------------------
-    // Variables (Geometry)
-    // ----------------------------------------------------------------------------
 protected:
-    /** The remaining scene objects. */
-    std::vector<SceneObject> scene_objects;
-
-    std::vector<float> convex_object_vertices_1;
-    std::vector<float> convex_object_vertices_2;
-    std::vector<float> minkowski_difference_vertices;
-
-    std::vector<glm::vec3> convex_object_positions_1;
-    std::vector<glm::vec3> convex_object_positions_2;
-    std::vector<glm::vec3> minkowski_difference_positions;
-
-    std::shared_ptr<ConvexCollider> convex_mesh_1;
-    std::shared_ptr<ConvexCollider> convex_mesh_2;
-
-    SceneObject convex_object_1;
-    SceneObject convex_object_2;
-    SceneObject minkowski_difference;
-
-    Geometry convex_geometry_1;
-    Geometry convex_geometry_2;
-    Geometry minkowski_difference_geometry;
+    std::vector<std::shared_ptr<ConvexObject>> convex_objects;
 
     std::vector<SceneObject> active_simplex_vertex_highlights;
     std::vector<SceneObject> simplex_vertex_highlights;
@@ -62,88 +53,57 @@ protected:
     SceneObject world_axis_y;
     SceneObject world_axis_z;
 
-    // ----------------------------------------------------------------------------
-    // Variables (Textures)
-    // ----------------------------------------------------------------------------
 
-    // ----------------------------------------------------------------------------
-    // Variables (Light)
-    // ----------------------------------------------------------------------------
-protected:
-    /** The UBO storing the data about lights - positions, colors, etc. */
     PhongLightsUBO phong_lights_ubo;
-
     float light_position_rad = glm::radians(60.f);
 
-    // ----------------------------------------------------------------------------
-    // Variables (Camera)
-    // ----------------------------------------------------------------------------
-protected:
-    /** The UBO storing the information about camera. */
+
     CameraUBO camera_ubo;
-
-    // ----------------------------------------------------------------------------
-    // Variables (Shaders)
-    // ----------------------------------------------------------------------------
-
-    // ----------------------------------------------------------------------------
-    // Variables (Systems)
-    // ----------------------------------------------------------------------------
-
-    cdlib::SteppableGJKEPA gjk;
-
-    // ----------------------------------------------------------------------------
-    // Variables (GUI)
-    // ----------------------------------------------------------------------------
-protected:
-    bool show_gui = true;
 
     CollisionDetectionMethod selected_method = GJK_EPA;
 
+    bool show_gui = true;
     float object_distance = 1.0f;
     float last_object_distance = 1.0f;
 
+    bool show_wireframe = true;
+    bool auto_calculate_collision = false;
+    bool step_by_step = false;
+
+    bool show_convex_objects = true;
+    bool show_extra_objects = true;
+
+    // Main objects
     int object_seed_1 = 7;
     int object_seed_2 = 5;
 
     int last_object_seed_1 = 7;
     int last_object_seed_2 = 5;
 
-    bool show_wireframe = true;
-    bool auto_calculate_collision = false;
-    bool step_by_step = false;
+    std::shared_ptr<ConvexObject> object_1;
+    std::shared_ptr<ConvexObject> object_2;
+
+    // Extra objects
+    int extra_object_count = 6;
+
+    // GJK Specific
+    cdlib::SteppableGJKEPA gjk;
+
+    std::shared_ptr<ConvexObject> minkowski_object;
 
     bool show_minkowski_difference = false;
-    bool show_convex_objects = true;
 
-    // ----------------------------------------------------------------------------
-    // Constructors
-    // ----------------------------------------------------------------------------
 public:
     Application(int initial_width, int initial_height, std::vector<std::string> arguments = {});
 
-    /** Destroys the {@link Application} and releases the allocated resources. */
     virtual ~Application();
 
-    // ----------------------------------------------------------------------------
-    // Shaders
-    // ----------------------------------------------------------------------------
-    /**
-     * {@copydoc PV227Application::compile_shaders}
-     */
     void compile_shaders() override;
 
-    // ----------------------------------------------------------------------------
-    // Initialize Scene
-    // ----------------------------------------------------------------------------
 public:
-    /** Prepares the required cameras. */
     void prepare_cameras();
-    /** Prepares the required textures. */
     void prepare_textures();
-    /** Prepares the lights. */
     void prepare_lights();
-    /** Prepares the scene objects. */
     void prepare_scene();
 
     void prepare_convex_objects();
@@ -151,16 +111,19 @@ public:
     void create_vertex_highlight_objects();
     void draw_direction_highlights();
 
-    static Geometry create_line_geometry(const glm::vec3& from, const glm::vec3& to);
-    static Geometry create_line_geometry(const glm::vec3& origin, const glm::vec3& direction, float length);
+    static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& from, const glm::vec3& to);
+    static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& origin, const glm::vec3& direction, float length);
 
     static std::vector<std::array<float, 3>> random_points(int seed);
     // std::pair<Geometry, std::vector<float>> random_convex_geometry(const std::vector<std::array<float, 3>>& points);
-    static std::pair<Geometry, std::vector<float>> generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points);
+    static std::pair<std::shared_ptr<Geometry>, std::vector<float>> generate_convex_hull_geometry(const std::vector<glm::vec3>& points);
+    static std::pair<std::shared_ptr<Geometry>, std::vector<float>> generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points);
 
     static std::vector<glm::vec3> get_positions_from_buffer(const std::vector<float>& buffer);
 
     static std::vector<glm::vec3> get_minkowski_difference_positions(const std::vector<glm::vec3>& positions_1, const std::vector<glm::vec3>& positions_2);
+
+    static glm::vec3 pseudorandom_point(int seed);
 
     void recalculate_positions();
 
@@ -174,7 +137,7 @@ public:
      */
     void update(float delta) override;
 
-    void update_object_positions(float delta);
+    void update_object_positions();
 
     void gjk_step_visualize(cdlib::SteppableGJKState state);
 

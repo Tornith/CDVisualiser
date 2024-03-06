@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
@@ -19,7 +20,7 @@ namespace cdlib {
     public:
         GJK() = default;
 
-        GJK(const Collider* collider_1, const Collider* collider_2) : CollisionDetector(collider_1, collider_2) {}
+        GJK(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : CollisionDetector(std::move(collider_1), std::move(collider_2)) {}
 
         GJK(const GJK& other) = default;
 
@@ -126,7 +127,7 @@ namespace cdlib {
 
     public:
         SteppableGJK() = default;
-        SteppableGJK(const Collider* mesh_1, const Collider* mesh_2) : GJK(mesh_1, mesh_2) {}
+        SteppableGJK(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : GJK(std::move(collider_1), std::move(collider_2)) {}
 
         virtual void iteration_step();
 
@@ -171,7 +172,7 @@ namespace cdlib {
 
     public:
         SteppableGJKEPA() = default;
-        SteppableGJKEPA(const Collider* mesh_1, const Collider* mesh_2) : SteppableGJK(mesh_1, mesh_2) {}
+        SteppableGJKEPA(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : SteppableGJK(std::move(collider_1), std::move(collider_2)) {}
 
         void iteration_step() override;
 
