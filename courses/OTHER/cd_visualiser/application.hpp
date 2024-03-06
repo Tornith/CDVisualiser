@@ -14,6 +14,13 @@ enum CollisionDetectionMethod {
     SAP = 3
 };
 
+struct ConvexObject {
+    std::vector<float> vertices;
+    std::shared_ptr<ConvexCollider> collider;
+    SceneObject scene_object;
+    Geometry geometry;
+};
+
 class Application : public PV227Application {
     // ----------------------------------------------------------------------------
     // Variables (Geometry)

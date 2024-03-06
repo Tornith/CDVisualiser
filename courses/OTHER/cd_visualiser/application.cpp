@@ -269,6 +269,8 @@ std::vector<glm::vec3> Application::get_minkowski_difference_positions(const std
     return minkowski_difference;
 }
 
+// AABB tree
+
 
 
 // ----------------------------------------------------------------------------
@@ -417,7 +419,7 @@ void Application::render_scene() {
             render_object(convex_object_1, default_lit_program);
             render_object(convex_object_2, default_lit_program);
         }
-        if (show_minkowski_difference) {
+        if (selected_method == GJK_EPA && show_minkowski_difference) {
             render_object(minkowski_difference, default_lit_program);
         }
     };
@@ -536,7 +538,6 @@ void Application::render_ui() {
 
     ImGui::Spacing();
 
-    ImGui::Checkbox("Show minkowski difference", &show_minkowski_difference);
     ImGui::Checkbox("Show convex objects", &show_convex_objects);
 
     ImGui::Spacing();
@@ -547,68 +548,74 @@ void Application::render_ui() {
 
     ImGui::Checkbox("Auto-calculate collision", &auto_calculate_collision);
 
-    if (!auto_calculate_collision) {
-        // Button for manual collision calculation
-        if (ImGui::Button("Calculate collision")) {
-            // auto result = gjk.is_colliding();
-            // std::cout << "Collision: " << result << std::endl;
+    if (selected_method == CollisionDetectionMethod::GJK_EPA) {
+        ImGui::Checkbox("Show minkowski difference", &show_minkowski_difference);
+
+        if (!auto_calculate_collision) {
+            // Button for manual collision calculation
+            if (ImGui::Button("Calculate collision")) {
+                // auto result = gjk.is_colliding();
+                // std::cout << "Collision: " << result << std::endl;
+                gjk.evaluate();
+                auto result = gjk.get_collision_data();
+                std::cout << "Collision: " << result.has_value() << std::endl;
+                if (result.has_value()) {
+                    auto result_data = gjk.get_collision_data().value();
+                    std::cout << " - Normal: " << result_data.normal.x << " " << result_data.normal.y << " " << result_data.normal.z << std::endl;
+                    std::cout << " - Depth: " << result_data.depth << std::endl;
+
+                    // Draw the collision normal from origin
+                    direction_highlights.emplace_back(result_data.normal * result_data.depth, glm::vec3(0.0f));
+                }
+            }
+
+            // Test iterate buttons that iterate over the vertices of the convex objects
+            ImGui::Text("Iterate over vertices:");
+            ImGui::Indent(10.0f);
+            if (!step_by_step) {
+                if (ImGui::Button("Start step-by-step")) {
+                    step_by_step = true;
+                    gjk.step_by_step_init();
+                }
+            } else {
+                // ImGui::Text("Current vertex: %d / %d", current_vertex, max_vertex);
+                if (ImGui::Button("Next step")) {
+                    gjk_step_visualize(gjk.step_by_step_next());
+                }
+                if (ImGui::Button("Cancel step-by-step")) {
+                    step_by_step = false;
+                    // Clear the highlights
+                    active_simplex_vertex_highlights.clear();
+                    simplex_vertex_highlights.clear();
+                    active_object_vertex_highlights.clear();
+                    object_vertex_highlights.clear();
+                    direction_highlights.clear();
+                }
+            }
+        }
+        else {
+            direction_highlights.clear();
+            direction_highlight_objects.clear();
             gjk.evaluate();
             auto result = gjk.get_collision_data();
-            std::cout << "Collision: " << result.has_value() << std::endl;
+
             if (result.has_value()) {
                 auto result_data = gjk.get_collision_data().value();
-                std::cout << " - Normal: " << result_data.normal.x << " " << result_data.normal.y << " " << result_data.normal.z << std::endl;
-                std::cout << " - Depth: " << result_data.depth << std::endl;
+
+                ImGui::Text("The objects are: colliding");
+
+                ImGui::Text("Collision normal: %f %f %f", result_data.normal.x, result_data.normal.y, result_data.normal.z);
+                ImGui::Text("Collision depth: %f", result_data.depth);
 
                 // Draw the collision normal from origin
                 direction_highlights.emplace_back(result_data.normal * result_data.depth, glm::vec3(0.0f));
+                draw_direction_highlights();
+            } else {
+                ImGui::Text("The objects are: not colliding");
             }
         }
+    } else if (selected_method == CollisionDetectionMethod::V_CLIP) {
 
-        // Test iterate buttons that iterate over the vertices of the convex objects
-        ImGui::Text("Iterate over vertices:");
-        ImGui::Indent(10.0f);
-        if (!step_by_step) {
-            if (ImGui::Button("Start step-by-step")) {
-                step_by_step = true;
-                gjk.step_by_step_init();
-            }
-        } else {
-            // ImGui::Text("Current vertex: %d / %d", current_vertex, max_vertex);
-            if (ImGui::Button("Next step")) {
-                gjk_step_visualize(gjk.step_by_step_next());
-            }
-            if (ImGui::Button("Cancel step-by-step")) {
-                step_by_step = false;
-                // Clear the highlights
-                active_simplex_vertex_highlights.clear();
-                simplex_vertex_highlights.clear();
-                active_object_vertex_highlights.clear();
-                object_vertex_highlights.clear();
-                direction_highlights.clear();
-            }
-        }
-    }
-    else {
-        direction_highlights.clear();
-        direction_highlight_objects.clear();
-        gjk.evaluate();
-        auto result = gjk.get_collision_data();
-
-        if (result.has_value()) {
-            auto result_data = gjk.get_collision_data().value();
-
-            ImGui::Text("The objects are: colliding");
-
-            ImGui::Text("Collision normal: %f %f %f", result_data.normal.x, result_data.normal.y, result_data.normal.z);
-            ImGui::Text("Collision depth: %f", result_data.depth);
-
-            // Draw the collision normal from origin
-            direction_highlights.emplace_back(result_data.normal * result_data.depth, glm::vec3(0.0f));
-            draw_direction_highlights();
-        } else {
-            ImGui::Text("The objects are: not colliding");
-        }
     }
 
     ImGui::End();

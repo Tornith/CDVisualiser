@@ -12,25 +12,25 @@
 #include "collision_detector.hpp"
 
 namespace cdlib {
-    class GJKCollisionDetector : public CollisionDetector {
+    class GJK : public CollisionDetector {
     protected:
         std::vector<glm::vec3> simplex;
         glm::vec3 direction{};
     public:
-        GJKCollisionDetector() = default;
+        GJK() = default;
 
-        GJKCollisionDetector(const Collider* collider_1, const Collider* collider_2) : CollisionDetector(collider_1, collider_2) {}
+        GJK(const Collider* collider_1, const Collider* collider_2) : CollisionDetector(collider_1, collider_2) {}
 
-        GJKCollisionDetector(const GJKCollisionDetector& other) = default;
+        GJK(const GJK& other) = default;
 
-        GJKCollisionDetector(GJKCollisionDetector&& other) noexcept
+        GJK(GJK&& other) noexcept
             : CollisionDetector(other.collider_1, other.collider_2),
               simplex(std::move(other.simplex)),
               direction(other.direction)
             {
         }
 
-        GJKCollisionDetector& operator=(const GJKCollisionDetector& other) {
+        GJK& operator=(const GJK& other) {
             if (this == &other)
                 return *this;
             simplex = other.simplex;
@@ -40,7 +40,7 @@ namespace cdlib {
             return *this;
         }
 
-        GJKCollisionDetector& operator=(GJKCollisionDetector&& other) noexcept {
+        GJK& operator=(GJK&& other) noexcept {
             if (this == &other)
                 return *this;
             simplex = std::move(other.simplex);
@@ -50,7 +50,7 @@ namespace cdlib {
             return *this;
         }
 
-        ~GJKCollisionDetector() override = default;
+        ~GJK() override = default;
 
         virtual bool is_colliding();
 
@@ -79,7 +79,7 @@ namespace cdlib {
         constexpr static int MAX_ITERATIONS = 10000;
     };
 
-    class GJKEPA : public GJKCollisionDetector {
+    class GJKEPA : public GJK {
     public:
         [[nodiscard]] std::optional<CollisionData> get_collision_data() override;
     };
@@ -97,7 +97,7 @@ namespace cdlib {
         UNDEFINED
     };
 
-    class SteppableGJK : public GJKCollisionDetector {
+    class SteppableGJK : public GJK {
     protected:
         bool step_by_step_initialized = false;
         bool step_by_step_gjk_finished = false;
@@ -126,7 +126,7 @@ namespace cdlib {
 
     public:
         SteppableGJK() = default;
-        SteppableGJK(const Collider* mesh_1, const Collider* mesh_2) : GJKCollisionDetector(mesh_1, mesh_2) {}
+        SteppableGJK(const Collider* mesh_1, const Collider* mesh_2) : GJK(mesh_1, mesh_2) {}
 
         virtual void iteration_step();
 
