@@ -15,6 +15,7 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     prepare_textures();
     prepare_lights();
     prepare_scene();
+    prepare_collision_detectors();
 }
 
 Application::~Application() = default;
@@ -50,12 +51,18 @@ void Application::prepare_lights() {
 void Application::prepare_scene() {
     prepare_convex_objects();
 
-    // TODO: Remove this later
-    gjk = cdlib::SteppableGJKEPA(object_1->collider, object_2->collider);
-
     world_axis_x = SceneObject{create_line_geometry(glm::vec3(-1000.0f, 0.0f, 0.0f), glm::vec3(1000.0f, 0.0f, 0.0f)), ModelUBO(glm::mat4(1.0f)), red_material_ubo};
     world_axis_y = SceneObject{create_line_geometry(glm::vec3(0.0f, -1000.0f, 0.0f), glm::vec3(0.0f, 1000.0f, 0.0f)), ModelUBO(glm::mat4(1.0f)), green_material_ubo};
     world_axis_z = SceneObject{create_line_geometry(glm::vec3(0.0f, 0.0f, -1000.0f), glm::vec3(0.0f, 0.0f, 1000.0f)), ModelUBO(glm::mat4(1.0f)), blue_material_ubo};
+}
+
+void Application::prepare_collision_detectors() {
+    gjk = cdlib::SteppableGJKEPA(object_1->collider, object_2->collider);
+    recalculate_minkowski_difference();
+
+    auto colliders = std::ranges::transform_view(convex_objects, [](std::shared_ptr<ConvexObject>& convex_object) { return convex_object->collider; });
+    auto colliders_vector = std::vector<std::shared_ptr<cdlib::Collider>>(std::begin(colliders), std::end(colliders));
+    sap = cdlib::SAP(colliders_vector);
 }
 
 void Application::prepare_convex_objects() {
@@ -68,11 +75,11 @@ void Application::prepare_convex_objects() {
     auto p1 = get_positions_from_buffer(v1);
     auto p2 = get_positions_from_buffer(v2);
 
-    auto c1 = std::make_shared<cdlib::ConvexCollider>(p1);
-    auto c2 = std::make_shared<cdlib::ConvexCollider>(p2);
-
     auto m1 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance));
     auto m2 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance));
+
+    auto c1 = std::make_shared<cdlib::ConvexCollider>(p1, m1);
+    auto c2 = std::make_shared<cdlib::ConvexCollider>(p2, m2);
 
     auto s1 = SceneObject{g1, ModelUBO(m1), red_material_ubo};
     auto s2 = SceneObject{g2, ModelUBO(m2), green_material_ubo};
@@ -89,11 +96,11 @@ void Application::prepare_convex_objects() {
 
     // Randomly generate extra objects
     for (int i = 0; i < extra_object_count; i++) {
-        auto seed = 1000 + i;
+        auto seed = extra_object_seed * extra_object_count + i;
         auto [g, v] = generate_convex_hull_geometry(random_points(seed));
-        auto c = std::make_shared<cdlib::ConvexCollider>(get_positions_from_buffer(v));
         auto p = pseudorandom_point(seed);
         auto m = translate(glm::mat4(1.0f), p);
+        auto c = std::make_shared<cdlib::ConvexCollider>(get_positions_from_buffer(v), m);
         auto s = SceneObject{g, ModelUBO(m), white_material_ubo};
         auto o = ConvexObject{ std::move(v), m, c, s };
         convex_objects.push_back(std::make_shared<ConvexObject>(std::move(o)));
@@ -149,7 +156,6 @@ void Application::recalculate_minkowski_difference() {
     auto om = ConvexObject{ std::move(vm), mm, nullptr, sm };
 
     minkowski_object = std::make_shared<ConvexObject>(std::move(om));
-    convex_objects.push_back(minkowski_object);
 }
 
 std::vector<std::array<float, 3>> Application::random_points(int seed) {
@@ -406,17 +412,17 @@ void Application::render_scene() {
         // Iterate over the convex objects and render them
         for (const auto& object : convex_objects) {
             // If the object is one of the main objects, check if the show_convex_objects flag is set
-            if ((object == object_1 || object == object_2) && show_convex_objects) {
+            if ((object == object_1 || object == object_2) && show_convex_objects)
+                render_object(object->scene_object, default_lit_program);
+            // If the object is anything else, but is not minkowski or main object, its an extra object and check if the show_extra_objects flag is set
+            else if (object != object_1 && object != object_2 && show_extra_objects) {
                 render_object(object->scene_object, default_lit_program);
             }
-            // If the object is the minowski object, check if the show_minkowski_difference flag is set
-            else if (object == minkowski_object && show_minkowski_difference) {
-                render_object(object->scene_object, default_lit_program);
-            }
-            // If the object is anything else, its an extra object and check if the show_extra_objects flag is set
-            else if (show_extra_objects) {
-                render_object(object->scene_object, default_lit_program);
-            }
+        }
+
+        // If the current method is GJK+EPA and the show_minkowski_difference flag is set, render the minkowski object
+        if (selected_method == GJK_EPA && show_minkowski_difference) {
+            render_object(minkowski_object->scene_object, default_lit_program);
         }
     };
 
@@ -523,11 +529,16 @@ void Application::render_ui() {
     ImGui::InputInt("Object 2 seed", &object_seed_2);
 
     // Regenerate objects
-    if (object_seed_1 != last_object_seed_1 || object_seed_2 != last_object_seed_2) {
+    if (object_seed_1 != last_object_seed_1 || object_seed_2 != last_object_seed_2 ||
+        extra_object_seed != last_extra_object_seed || extra_object_count != last_extra_object_count) {
         last_object_seed_1 = object_seed_1;
         last_object_seed_2 = object_seed_2;
+        last_extra_object_seed = extra_object_seed;
+        last_extra_object_count = extra_object_count;
+
         prepare_convex_objects();
-        gjk = cdlib::SteppableGJKEPA(object_1->collider, object_2->collider);
+        prepare_collision_detectors();
+        recalculate_minkowski_difference();
     }
 
     // Slider for moving the objects closer together
@@ -536,6 +547,12 @@ void Application::render_ui() {
     ImGui::Spacing();
 
     ImGui::Checkbox("Show convex objects", &show_convex_objects);
+
+    ImGui::Spacing();
+
+    ImGui::Checkbox("Show extra objects", &show_extra_objects);
+    ImGui::InputInt("Extra object seed", &extra_object_seed);
+    ImGui::SliderInt("Extra object count", &extra_object_count, 0, 100);
 
     ImGui::Spacing();
 
@@ -611,8 +628,21 @@ void Application::render_ui() {
                 ImGui::Text("The objects are: not colliding");
             }
         }
-    } else if (selected_method == CollisionDetectionMethod::V_CLIP) {
+    }
+    else if (selected_method == CollisionDetectionMethod::V_CLIP) {
 
+    }
+    else if (selected_method == CollisionDetectionMethod::AABBTREE) {
+
+    }
+    else if (selected_method == CollisionDetectionMethod::SAP) {
+        if (ImGui::Button("Calculate collision")) {
+            auto collisions = sap.get_collisions();
+            std::cout << "Collisions: " << collisions.size() << std::endl;
+            for (const auto& pair : sap.get_collisions()) {
+                std::cout << " - Colliding pair: " << pair.first << " " << pair.second << std::endl;
+            }
+        }
     }
 
     ImGui::End();

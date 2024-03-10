@@ -18,6 +18,11 @@ namespace cdlib {
 
         explicit Collider(const std::vector<glm::vec3>& vertices) : vertices(vertices) {
             aabb = calculate_aabb(get_global_vertices());
+            transform = glm::mat4(1.0);
+        }
+
+        Collider(const std::vector<glm::vec3>& vertices, const glm::mat4& transform) : vertices(vertices), transform(transform) {
+            aabb = calculate_aabb(get_global_vertices());
         }
 
         virtual ~Collider() = default;
@@ -120,6 +125,10 @@ namespace cdlib {
 
         explicit ConvexCollider(const std::vector<glm::vec3>& vertices)
             : Collider(vertices) {
+        }
+
+        ConvexCollider(const std::vector<glm::vec3>& vertices, const glm::mat4& transform)
+            : Collider(vertices, transform) {
         }
 
         ~ConvexCollider() override = default;

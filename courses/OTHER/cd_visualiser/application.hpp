@@ -6,9 +6,10 @@
 #include "scene_object.hpp"
 
 #include "QuickHull.hpp"
+#include "sap.hpp"
 
 class ColliderAppWrapper {
-    std::unique_ptr<cdlib::CollisionDetector> collision_detector;
+    std::unique_ptr<cdlib::NarrowCollisionDetector> collision_detector;
 };
 
 enum CollisionDetectionMethod {
@@ -84,7 +85,11 @@ protected:
     std::shared_ptr<ConvexObject> object_2;
 
     // Extra objects
+    int extra_object_seed = 150;
     int extra_object_count = 6;
+
+    int last_extra_object_seed = 150;
+    int last_extra_object_count = 6;
 
     // GJK Specific
     cdlib::SteppableGJKEPA gjk;
@@ -92,6 +97,13 @@ protected:
     std::shared_ptr<ConvexObject> minkowski_object;
 
     bool show_minkowski_difference = false;
+
+    // V-Clip Specific
+
+    // AABBTREE Specific
+
+    // SAP Specific
+    cdlib::SAP sap;
 
 public:
     Application(int initial_width, int initial_height, std::vector<std::string> arguments = {});
@@ -107,6 +119,7 @@ public:
     void prepare_scene();
 
     void prepare_convex_objects();
+    void prepare_collision_detectors();
 
     void create_vertex_highlight_objects();
     void draw_direction_highlights();

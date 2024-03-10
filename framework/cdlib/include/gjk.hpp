@@ -13,19 +13,19 @@
 #include "collision_detector.hpp"
 
 namespace cdlib {
-    class GJK : public CollisionDetector {
+    class GJK : public NarrowCollisionDetector {
     protected:
         std::vector<glm::vec3> simplex;
         glm::vec3 direction{};
     public:
         GJK() = default;
 
-        GJK(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : CollisionDetector(std::move(collider_1), std::move(collider_2)) {}
+        GJK(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : NarrowCollisionDetector(std::move(collider_1), std::move(collider_2)) {}
 
         GJK(const GJK& other) = default;
 
         GJK(GJK&& other) noexcept
-            : CollisionDetector(other.collider_1, other.collider_2),
+            : NarrowCollisionDetector(other.collider_1, other.collider_2),
               simplex(std::move(other.simplex)),
               direction(other.direction)
             {
