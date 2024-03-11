@@ -20,7 +20,9 @@ target_sources(
         include/collision_detector.hpp
         include/collider.hpp
         include/collision_data.hpp
+
         include/voronoi.hpp
+        src/voronoi.cpp
 
         include/gjk.hpp
         include/epa.hpp

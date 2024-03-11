@@ -3,7 +3,6 @@
 !.gitignore
 
 # Ignore folders beginning with cmake
-/cmake
 /cmake-build*
 
 # Ignore other folders
