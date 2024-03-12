@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <variant>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -28,9 +29,15 @@ namespace cdlib::Voronoi {
             return {normal, d};
         }
 
-        [[nodiscard]] bool is_above(const glm::vec3& point) const {
-            return dot(normal, point) + d >= 0;
+        [[nodiscard]] float distance_to(const glm::vec3& point) const {
+            return dot(normal, point) + d;
         }
+
+        [[nodiscard]] bool is_above(const glm::vec3& point) const {
+            return distance_to(point) > 0;
+        }
+
+        [[nodiscard]] float get_intersection_parameter(const glm::vec3& point_a, const glm::vec3& point_b) const;
     };
 
     struct Feature {
@@ -45,6 +52,10 @@ namespace cdlib::Voronoi {
             neighbours.push_back(neighbour);
         }
 
+        void add_neighbours(const std::vector<std::shared_ptr<Feature>>& new_neighbours){
+            neighbours.insert(neighbours.end(), new_neighbours.begin(), new_neighbours.end());
+        }
+
         void clear_neighbours(){
             neighbours.clear();
         }
@@ -57,6 +68,10 @@ namespace cdlib::Voronoi {
 
         Face(const glm::vec3& normal, const glm::vec3& point)
             : plane({normal, point}){
+        }
+
+        Face(const glm::vec3& normal, float d)
+            : plane({normal, d}){
         }
 
         explicit Face(const Plane& plane)
@@ -99,20 +114,43 @@ namespace cdlib::Voronoi {
         [[nodiscard]] bool in_voronoi_region(const glm::vec3& point) const override;
     };
 
+    struct VoronoiObject {
+        std::vector<std::shared_ptr<Vertex>> vertices;
+        std::vector<std::shared_ptr<Edge>> edges;
+        std::vector<std::shared_ptr<Face>> faces;
+    };
 
-    [[nodiscard]] inline Plane get_voronoi_plane(const Vertex& vertex, const Edge& edge);
-    [[nodiscard]] inline Plane get_voronoi_plane(const Face& face, const Edge& edge);
+    struct VoronoiPlane final : Plane {
+        // The face/vertex that the plane is associated with
+        std::variant<std::shared_ptr<Face>, std::shared_ptr<Vertex>> feature;
+        // The edge that the plane is associated with
+        std::shared_ptr<Edge> edge;
+    };
 
-    [[nodiscard]] std::optional<Plane> get_voronoi_plane_safe(auto feature, const Edge& edge);
+    struct ClipData {
+        bool is_clipped;
+        float lambda_l;
+        float lambda_h;
+        std::shared_ptr<Feature> neighbour_l;
+        std::shared_ptr<Feature> neighbour_h;
+    };
+
+
+    [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Vertex>& vertex, const std::shared_ptr<Edge>& edge, bool inverse_normal = false);
+    [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Face>& face, const std::shared_ptr<Edge>& edge, bool inverse_normal = false);
+
+    [[nodiscard]] std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature, const std::shared_ptr<Edge>& edge, bool inverse_normal = false);
 
     template <typename T> requires std::is_base_of_v<Feature, T>
-    [[nodiscard]] bool in_voronoi_region(const T& feature, const glm::vec3& point) {
-        return std::ranges::all_of(feature.neighbours, [&feature, &point](const std::shared_ptr<Feature>& edge){
+    [[nodiscard]] bool in_voronoi_region(const std::shared_ptr<T>& feature, const glm::vec3& point) {
+        return std::ranges::all_of(feature->neighbours, [&feature, &point](const std::shared_ptr<Feature>& edge){
             const auto casted_edge = std::dynamic_pointer_cast<Edge>(edge);
             if (!casted_edge){
-                throw std::runtime_error(T::class_name + " neighbour is not an edge");
+                throw std::runtime_error("Feature does not have a valid edge neighbour");
             }
-            return get_voronoi_plane(feature, *casted_edge).is_above(point);
+            return get_voronoi_plane(feature, casted_edge).is_above(point);
         });
     }
+
+    [[nodiscard]] inline ClipData clip_edge(const std::shared_ptr<Feature>& feature, const std::shared_ptr<Edge>& edge);
 }

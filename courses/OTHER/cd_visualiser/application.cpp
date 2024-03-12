@@ -1,15 +1,19 @@
 #include "application.hpp"
 
+#include <map>
 #include <random>
 #include <ranges>
 #include <set>
 #include <utility>
 
 #include "utils.hpp"
+#include "voronoi.hpp"
 
 #include "glm/gtx/hash.hpp"
 
 Application::Application(int initial_width, int initial_height, std::vector<std::string> arguments) : PV227Application(initial_width, initial_height, std::move(arguments)) {
+    std::cout << test_voronoi_planes() << std::endl;
+
     Application::compile_shaders();
     prepare_cameras();
     prepare_textures();
@@ -200,7 +204,7 @@ std::pair<std::shared_ptr<Geometry>, std::vector<float>> Application::generate_c
 
         // Add the normal to the map for each index
         for (size_t j = 0; j < 3; j++) {
-            normals[indexBuffer[i + j]].push_back(normal);
+            normals[static_cast<uint32_t>(indexBuffer[i + j])].push_back(normal);
         }
     }
 
@@ -213,7 +217,7 @@ std::pair<std::shared_ptr<Geometry>, std::vector<float>> Application::generate_c
 
         // Normals
         glm::vec3 normal(0.0f);
-        for (const auto& n : normals[i]) {
+        for (const auto& n : normals[static_cast<uint32_t>(i)]) {
             normal += n;
         }
         normal = glm::normalize(normal);
@@ -751,4 +755,203 @@ void Application::on_resize(int width, int height) {
     auto aspect = static_cast<float>(width) / static_cast<float>(height);
     camera_ubo.set_projection(glm::perspective(glm::radians(45.f), aspect, 0.1f, 1000.0f));
     camera_ubo.update_opengl_data();
+}
+
+
+void Application::run_tests() {
+    std::cout << "Voronoi Planes:" << test_voronoi_planes() << std::endl;
+}
+
+std::shared_ptr<cdlib::Voronoi::VoronoiObject> Application::create_test_cube_voronoi(glm::mat4 model_matrix) {
+    // Vertices array
+    std::vector vertices = {
+        glm::vec3(1, 1, 1),
+        glm::vec3(-1, 1, 1),
+        glm::vec3(-1, -1, 1),
+        glm::vec3(1, -1, 1),
+        glm::vec3(1, 1, -1),
+        glm::vec3(-1, 1, -1),
+        glm::vec3(-1, -1, -1),
+        glm::vec3(1, -1, -1)
+    };
+
+    // Transform the vertices
+    for (auto& vertex : vertices) {
+        vertex = glm::vec3(model_matrix * glm::vec4(vertex, 1.0f));
+    }
+
+    // Create vertices
+    auto v1 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[0]);
+    auto v2 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[1]);
+    auto v3 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[2]);
+    auto v4 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[3]);
+    auto v5 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[4]);
+    auto v6 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[5]);
+    auto v7 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[6]);
+    auto v8 = std::make_shared<cdlib::Voronoi::Vertex>(vertices[7]);
+
+    // Create the faces
+    auto face_normal_1 = glm::cross(vertices[1] - vertices[0], vertices[0] - vertices[3]);
+    auto face1 = std::make_shared<cdlib::Voronoi::Face>(face_normal_1, vertices[0]);
+    auto face_normal_2 = glm::cross(vertices[5] - vertices[4], vertices[7] - vertices[4]);
+    auto face2 = std::make_shared<cdlib::Voronoi::Face>(face_normal_2, vertices[4]);
+    auto face_normal_3 = glm::cross(vertices[4] - vertices[0], vertices[3] - vertices[0]);
+    auto face3 = std::make_shared<cdlib::Voronoi::Face>(face_normal_3, vertices[0]);
+    auto face_normal_4 = glm::cross(vertices[5] - vertices[1], vertices[1] - vertices[2]);
+    auto face4 = std::make_shared<cdlib::Voronoi::Face>(face_normal_4, vertices[1]);
+    auto face_normal_5 = glm::cross(vertices[1] - vertices[0], vertices[4] - vertices[0]);
+    auto face5 = std::make_shared<cdlib::Voronoi::Face>(face_normal_5, vertices[0]);
+    auto face_normal_6 = glm::cross(vertices[6] - vertices[2], vertices[2] - vertices[3]);
+    auto face6 = std::make_shared<cdlib::Voronoi::Face>(face_normal_6, vertices[2]);
+
+    // Create the edges
+    auto e1 = std::make_shared<cdlib::Voronoi::Edge>(v1->position, v2->position);
+    auto e2 = std::make_shared<cdlib::Voronoi::Edge>(v2->position, v3->position);
+    auto e3 = std::make_shared<cdlib::Voronoi::Edge>(v3->position, v4->position);
+    auto e4 = std::make_shared<cdlib::Voronoi::Edge>(v4->position, v1->position);
+    auto e5 = std::make_shared<cdlib::Voronoi::Edge>(v1->position, v5->position);
+    auto e6 = std::make_shared<cdlib::Voronoi::Edge>(v2->position, v6->position);
+    auto e7 = std::make_shared<cdlib::Voronoi::Edge>(v3->position, v7->position);
+    auto e8 = std::make_shared<cdlib::Voronoi::Edge>(v4->position, v8->position);
+    auto e9 = std::make_shared<cdlib::Voronoi::Edge>(v5->position, v6->position);
+    auto e10 = std::make_shared<cdlib::Voronoi::Edge>(v6->position, v7->position);
+    auto e11 = std::make_shared<cdlib::Voronoi::Edge>(v7->position, v8->position);
+    auto e12 = std::make_shared<cdlib::Voronoi::Edge>(v8->position, v5->position);
+
+    // Add the neighbors to all the features
+    v1->add_neighbours({e1, e4, e5});
+    v2->add_neighbours({e1, e2, e6});
+    v3->add_neighbours({e2, e3, e7});
+    v4->add_neighbours({e3, e4, e8});
+    v5->add_neighbours({e5, e9, e12});
+    v6->add_neighbours({e6, e9, e10});
+    v7->add_neighbours({e7, e10, e11});
+    v8->add_neighbours({e8, e11, e12});
+
+    e1->add_neighbours({v1, v2, face1, face5});
+    e2->add_neighbours({v2, v3, face1, face4});
+    e3->add_neighbours({v3, v4, face1, face6});
+    e4->add_neighbours({v4, v1, face1, face3});
+    e5->add_neighbours({v1, v5, face5, face3});
+    e6->add_neighbours({v2, v6, face5, face4});
+    e7->add_neighbours({v3, v7, face4, face6});
+    e8->add_neighbours({v4, v8, face6, face3});
+    e9->add_neighbours({v5, v6, face2, face5});
+    e10->add_neighbours({v6, v7, face2, face4});
+    e11->add_neighbours({v7, v8, face2, face6});
+    e12->add_neighbours({v8, v5, face2, face3});
+
+    face1->add_neighbours({e1, e2, e3, e4});
+    face2->add_neighbours({e9, e10, e11, e12});
+    face3->add_neighbours({e5, e8, e12, e4});
+    face4->add_neighbours({e6, e7, e10, e2});
+    face5->add_neighbours({e5, e9, e6, e1});
+    face6->add_neighbours({e7, e11, e8, e3});
+
+    return std::make_shared<cdlib::Voronoi::VoronoiObject>(std::vector{v1, v2, v3, v4, v5, v6, v7, v8}, std::vector{e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12}, std::vector{face1, face2, face3, face4, face5, face6});
+}
+
+std::shared_ptr<cdlib::Voronoi::VoronoiObject> Application::create_test_plane_voronoi() {
+    // Create vertices
+    auto v1 = std::make_shared<cdlib::Voronoi::Vertex>(glm::vec3(1, 0, 1));
+    auto v2 = std::make_shared<cdlib::Voronoi::Vertex>(glm::vec3(-1, 0, 1));
+    auto v3 = std::make_shared<cdlib::Voronoi::Vertex>(glm::vec3(-1, 0, -1));
+    auto v4 = std::make_shared<cdlib::Voronoi::Vertex>(glm::vec3(1, 0, -1));
+
+    // Create the face
+    auto face = std::make_shared<cdlib::Voronoi::Face>(glm::vec3(0, 1, 0), 0.0f);
+
+    // Create the edges
+    auto e1 = std::make_shared<cdlib::Voronoi::Edge>(v1->position, v2->position);
+    auto e2 = std::make_shared<cdlib::Voronoi::Edge>(v2->position, v3->position);
+    auto e3 = std::make_shared<cdlib::Voronoi::Edge>(v3->position, v4->position);
+    auto e4 = std::make_shared<cdlib::Voronoi::Edge>(v4->position, v1->position);
+
+    // Add the neighbors to the edges
+    v1->add_neighbours({e1, e4});
+    v2->add_neighbours({e1, e2});
+    v3->add_neighbours({e2, e3});
+    v4->add_neighbours({e3, e4});
+
+    e1->add_neighbours({v1, v2, face});
+    e2->add_neighbours({v2, v3, face});
+    e3->add_neighbours({v3, v4, face});
+    e4->add_neighbours({v4, v1, face});
+
+    face->add_neighbours({e1, e2, e3, e4});
+
+    return std::make_shared<cdlib::Voronoi::VoronoiObject>(std::vector{v1, v2, v3, v4}, std::vector{e1, e2, e3, e4}, std::vector{face});
+}
+
+bool Application::test_voronoi_planes() {
+    bool result = true;
+    auto perform_test = [&result](const std::shared_ptr<cdlib::Voronoi::VoronoiObject>& object, const glm::vec3& point, const size_t type, const size_t idx, bool expected) {
+        if (type == 0) {
+            const auto face_result = object->faces[idx]->in_voronoi_region(point);
+            result &= face_result == expected;
+        }
+        else if (type == 1) {
+            const auto edge_result = object->edges[idx]->in_voronoi_region(point);
+            result &= edge_result == expected;
+        }
+        else if (type == 2) {
+            const auto vertex_result = object->vertices[idx]->in_voronoi_region(point);
+            result &= vertex_result == expected;
+        }
+    };
+
+    auto plane = create_test_plane_voronoi();
+
+    // Plane tests
+    //  - Test if the point (0, 1, 0) lies in the face
+    perform_test(plane, glm::vec3(0, 1, 0), 0, 0, true);
+    //  - Test if the point (-2, 1, 0) does not lie in the face
+    perform_test(plane, glm::vec3(-2, 1, 0), 0, 0, false);
+    //  - Test if the point (0, -1, 0) lies in the face
+    perform_test(plane, glm::vec3(0, -1, 0), 0, 0, true);
+    //  - Test if the point (0, 0, 0) lies in the face
+    perform_test(plane, glm::vec3(0, 0, 0), 0, 0, true);
+    //  - Test if the point (0, 0, 1.5) does not lie in the face
+    perform_test(plane, glm::vec3(0, 0, 1.5), 0, 0, false);
+    //  - Test if the point (1.1, 0.5, 1.1) does not lie in the face
+    perform_test(plane, glm::vec3(1.1, 0.5, 1.1), 0, 0, false);
+
+    auto cube = create_test_cube_voronoi();
+
+    // Cube face tests
+    //  - Test if the point (0, 2, 0) lies in the face 5
+    perform_test(cube, glm::vec3(0, 2, 0), 0, 4, true);
+    //  - Test if the point (2, 2, 2) does not lie in any face
+    for (size_t i = 0; i < 6; i++) {
+        perform_test(cube, glm::vec3(2, 2, 2), 0, i, false);
+    }
+    //  - Test if the point (-1.5, 0, 0) lies in the face 3 and 4
+    perform_test(cube, glm::vec3(-1.5, 0, 0), 0, 2, true);
+    perform_test(cube, glm::vec3(-1.5, 0, 0), 0, 3, true);
+    //  - Test if the point (0, 0, 0) lies in all faces
+    for (size_t i = 0; i < 6; i++) {
+        perform_test(cube, glm::vec3(0, 0, 0), 0, i, true);
+    }
+
+    // Cube edge tests
+     // - Test if the point (1.5, 1.5, 0) lies in the edge 5
+    perform_test(cube, glm::vec3(1.5, 1.5, 0), 1, 4, true);
+    //  - Test if the point (0, -5, -2) lies in the edge 11
+    perform_test(cube, glm::vec3(0, -5, -2), 1, 10, true);
+    //  - Test if the point (0, 12.5, 0) does not lie in any edge
+    for (size_t i = 0; i < 12; i++) {
+        perform_test(cube, glm::vec3(0, 12.5, 0), 1, i, false);
+    }
+
+    // Vertex tests
+    //  - Test if the point (1.2, 1.1, 1.5) lies in the vertex 1
+    perform_test(cube, glm::vec3(1.2, 1.1, 1.5), 2, 0, true);
+    // - Test if the point (45, -33, 10) lies in the vertex 4
+    perform_test(cube, glm::vec3(45, -33, 10), 2, 3, true);
+    // - Test if the point (0, 0, 0) doesn't lie in any vertex
+    for (size_t i = 0; i < 8; i++) {
+        perform_test(cube, glm::vec3(0, 0, 0), 2, i, false);
+    }
+
+    return result;
 }

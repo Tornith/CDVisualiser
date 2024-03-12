@@ -7,6 +7,7 @@
 
 #include "QuickHull.hpp"
 #include "sap.hpp"
+#include "voronoi.hpp"
 
 class ColliderAppWrapper {
     std::unique_ptr<cdlib::NarrowCollisionDetector> collision_detector;
@@ -184,4 +185,15 @@ public:
     void on_key_pressed(int key, int scancode, int action, int mods) override;
 
     void on_resize(int width, int height) override;
+
+    // ----------------------------------------------------------------------------
+    // Testing
+    // ----------------------------------------------------------------------------
+public:
+    void run_tests();
+
+    std::shared_ptr<cdlib::Voronoi::VoronoiObject> create_test_cube_voronoi(glm::mat4 model_matrix = glm::mat4(1.0f));
+    std::shared_ptr<cdlib::Voronoi::VoronoiObject> create_test_plane_voronoi();
+
+    bool test_voronoi_planes();
 };
