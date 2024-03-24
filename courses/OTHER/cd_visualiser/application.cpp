@@ -883,9 +883,15 @@ std::shared_ptr<cdlib::Voronoi::VoronoiObject> Application::create_test_plane_vo
     return std::make_shared<cdlib::Voronoi::VoronoiObject>(std::vector{v1, v2, v3, v4}, std::vector{e1, e2, e3, e4}, std::vector{face});
 }
 
+std::shared_ptr<cdlib::Voronoi::VoronoiObject> Application::create_test_polyhedron_voronoi() {
+    // https://www.desmos.com/3d/b7bdf5b643
+    auto v1 = std::make_shared<cdlib::Voronoi::Vertex>(glm::vec3(1, 1, 1));
+    return nullptr;
+}
+
 bool Application::test_voronoi_planes() {
     bool result = true;
-    auto perform_test = [&result](const std::shared_ptr<cdlib::Voronoi::VoronoiObject>& object, const glm::vec3& point, const size_t type, const size_t idx, bool expected) {
+    auto in_region_test = [&result](const std::shared_ptr<cdlib::Voronoi::VoronoiObject>& object, const glm::vec3& point, const size_t type, const size_t idx, bool expected) {
         if (type == 0) {
             const auto face_result = object->faces[idx]->in_voronoi_region(point);
             result &= face_result == expected;
@@ -904,54 +910,58 @@ bool Application::test_voronoi_planes() {
 
     // Plane tests
     //  - Test if the point (0, 1, 0) lies in the face
-    perform_test(plane, glm::vec3(0, 1, 0), 0, 0, true);
+    in_region_test(plane, glm::vec3(0, 1, 0), 0, 0, true);
     //  - Test if the point (-2, 1, 0) does not lie in the face
-    perform_test(plane, glm::vec3(-2, 1, 0), 0, 0, false);
+    in_region_test(plane, glm::vec3(-2, 1, 0), 0, 0, false);
     //  - Test if the point (0, -1, 0) lies in the face
-    perform_test(plane, glm::vec3(0, -1, 0), 0, 0, true);
+    in_region_test(plane, glm::vec3(0, -1, 0), 0, 0, true);
     //  - Test if the point (0, 0, 0) lies in the face
-    perform_test(plane, glm::vec3(0, 0, 0), 0, 0, true);
+    in_region_test(plane, glm::vec3(0, 0, 0), 0, 0, true);
     //  - Test if the point (0, 0, 1.5) does not lie in the face
-    perform_test(plane, glm::vec3(0, 0, 1.5), 0, 0, false);
+    in_region_test(plane, glm::vec3(0, 0, 1.5), 0, 0, false);
     //  - Test if the point (1.1, 0.5, 1.1) does not lie in the face
-    perform_test(plane, glm::vec3(1.1, 0.5, 1.1), 0, 0, false);
+    in_region_test(plane, glm::vec3(1.1, 0.5, 1.1), 0, 0, false);
 
     auto cube = create_test_cube_voronoi();
 
     // Cube face tests
     //  - Test if the point (0, 2, 0) lies in the face 5
-    perform_test(cube, glm::vec3(0, 2, 0), 0, 4, true);
+    in_region_test(cube, glm::vec3(0, 2, 0), 0, 4, true);
     //  - Test if the point (2, 2, 2) does not lie in any face
     for (size_t i = 0; i < 6; i++) {
-        perform_test(cube, glm::vec3(2, 2, 2), 0, i, false);
+        in_region_test(cube, glm::vec3(2, 2, 2), 0, i, false);
     }
     //  - Test if the point (-1.5, 0, 0) lies in the face 3 and 4
-    perform_test(cube, glm::vec3(-1.5, 0, 0), 0, 2, true);
-    perform_test(cube, glm::vec3(-1.5, 0, 0), 0, 3, true);
+    in_region_test(cube, glm::vec3(-1.5, 0, 0), 0, 2, true);
+    in_region_test(cube, glm::vec3(-1.5, 0, 0), 0, 3, true);
     //  - Test if the point (0, 0, 0) lies in all faces
     for (size_t i = 0; i < 6; i++) {
-        perform_test(cube, glm::vec3(0, 0, 0), 0, i, true);
+        in_region_test(cube, glm::vec3(0, 0, 0), 0, i, true);
     }
 
     // Cube edge tests
      // - Test if the point (1.5, 1.5, 0) lies in the edge 5
-    perform_test(cube, glm::vec3(1.5, 1.5, 0), 1, 4, true);
+    in_region_test(cube, glm::vec3(1.5, 1.5, 0), 1, 4, true);
     //  - Test if the point (0, -5, -2) lies in the edge 11
-    perform_test(cube, glm::vec3(0, -5, -2), 1, 10, true);
+    in_region_test(cube, glm::vec3(0, -5, -2), 1, 10, true);
     //  - Test if the point (0, 12.5, 0) does not lie in any edge
     for (size_t i = 0; i < 12; i++) {
-        perform_test(cube, glm::vec3(0, 12.5, 0), 1, i, false);
+        in_region_test(cube, glm::vec3(0, 12.5, 0), 1, i, false);
     }
 
     // Vertex tests
     //  - Test if the point (1.2, 1.1, 1.5) lies in the vertex 1
-    perform_test(cube, glm::vec3(1.2, 1.1, 1.5), 2, 0, true);
+    in_region_test(cube, glm::vec3(1.2, 1.1, 1.5), 2, 0, true);
     // - Test if the point (45, -33, 10) lies in the vertex 4
-    perform_test(cube, glm::vec3(45, -33, 10), 2, 3, true);
+    in_region_test(cube, glm::vec3(45, -33, 10), 2, 3, true);
     // - Test if the point (0, 0, 0) doesn't lie in any vertex
     for (size_t i = 0; i < 8; i++) {
-        perform_test(cube, glm::vec3(0, 0, 0), 2, i, false);
+        in_region_test(cube, glm::vec3(0, 0, 0), 2, i, false);
     }
 
     return result;
+}
+
+bool Application::test_clip_edge() {
+
 }
