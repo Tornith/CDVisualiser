@@ -21,6 +21,9 @@ target_sources(
         include/collider.hpp
         include/collision_data.hpp
 
+        include/convex_polyhedron.hpp
+        src/convex_polyhedron.cpp
+
         include/voronoi.hpp
         src/voronoi.cpp
 

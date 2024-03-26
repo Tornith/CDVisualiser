@@ -48,9 +48,7 @@ namespace cdlib{
 
         ~VClip() override = default;
 
-        bool clip_edge() {
 
-        }
 
         [[nodiscard]] std::optional<CollisionData> get_collision_data() override;
     };

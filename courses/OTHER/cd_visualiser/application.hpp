@@ -192,9 +192,8 @@ public:
 public:
     void run_tests();
 
-    static std::shared_ptr<cdlib::Voronoi::VoronoiObject> create_test_cube_voronoi(glm::mat4 model_matrix = glm::mat4(1.0f));
-    static std::shared_ptr<cdlib::Voronoi::VoronoiObject> create_test_plane_voronoi();
-    static std::shared_ptr<cdlib::Voronoi::VoronoiObject> create_test_polyhedron_voronoi();
+    static std::shared_ptr<cdlib::ConvexPolyhedron> create_test_cube_voronoi(glm::mat4 model_matrix = glm::mat4(1.0f));
+    static std::shared_ptr<cdlib::ConvexPolyhedron> create_test_polyhedron_voronoi();
 
     bool test_voronoi_planes();
     bool test_clip_edge();
