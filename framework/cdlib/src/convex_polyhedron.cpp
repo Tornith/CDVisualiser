@@ -101,4 +101,12 @@ namespace cdlib {
     std::vector<std::shared_ptr<Feature>> HalfEdge::get_neighbours() const {
         return {start, end, face, twin->face};
     }
+
+    std::shared_ptr<HalfEdge> HalfEdge::create(const glm::vec3& start, const glm::vec3& end) {
+        const auto edge = std::make_shared<HalfEdge>(std::make_shared<Vertex>(start), std::make_shared<Vertex>(end));
+        const auto twin = std::make_shared<HalfEdge>(edge->end, edge->start);
+        edge->twin = twin;
+        twin->twin = edge;
+        return edge;
+    }
 }

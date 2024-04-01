@@ -107,6 +107,8 @@ namespace cdlib {
         friend bool operator!=(const HalfEdge& lhs, const HalfEdge& rhs) = default;
 
         [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_neighbours() const override;
+
+        static std::shared_ptr<HalfEdge> create(const glm::vec3& start, const glm::vec3& end);
     };
 
     struct ConvexPolyhedron {

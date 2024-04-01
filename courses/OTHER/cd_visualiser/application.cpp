@@ -967,5 +967,11 @@ bool Application::test_voronoi_planes() {
 }
 
 bool Application::test_clip_edge() {
+    const auto polyhedron = create_test_polyhedron_voronoi();
+
+    const auto edge_1 = cdlib::HalfEdge::create(glm::vec3(-1.5, 3, -1), glm::vec3(0.5, 2, 1.5));
+    // Clip against edge 3
+    const auto clipped_1 = cdlib::Voronoi::clip_edge(edge_1, polyhedron->hedges[3]);
+
     return false;
 }
