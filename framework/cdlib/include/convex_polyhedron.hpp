@@ -37,7 +37,7 @@ namespace cdlib {
         }
 
         [[nodiscard]] bool is_above(const glm::vec3& point) const {
-            return distance_to(point) > 0;
+            return distance_to(point) >= 0;
         }
 
         [[nodiscard]] float get_intersection_parameter(const glm::vec3& point_a, const glm::vec3& point_b) const;

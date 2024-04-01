@@ -12,7 +12,7 @@
 #include "glm/gtx/hash.hpp"
 
 Application::Application(int initial_width, int initial_height, std::vector<std::string> arguments) : PV227Application(initial_width, initial_height, std::move(arguments)) {
-    std::cout << test_voronoi_planes() << std::endl;
+    run_tests();
 
     Application::compile_shaders();
     prepare_cameras();
@@ -759,8 +759,8 @@ void Application::on_resize(int width, int height) {
 
 
 void Application::run_tests() {
-    std::cout << "Voronoi Planes:" << test_voronoi_planes() << std::endl;
-    std::cout << "Clip Edges:" << test_clip_edge() << std::endl;
+    std::cout << "Voronoi Planes: " << test_voronoi_planes() << std::endl;
+    std::cout << "Clip Edges: " << test_clip_edge() << std::endl;
 }
 
 std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_cube_voronoi(glm::mat4 model_matrix) {
@@ -782,14 +782,6 @@ std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_cube_voronoi(g
     }
 
     // Indices (face) array
-    // std::vector<std::vector<size_t>> faces = {
-    //     {0, 2, 1}, {0, 3, 2}, // Front
-    //     {4, 5, 6}, {4, 6, 7}, // Back
-    //     {1, 2, 6}, {1, 6, 5}, // Right
-    //     {0, 7, 3}, {0, 4, 7}, // Left
-    //     {3, 6, 2}, {3, 7, 6}, // Bottom
-    //     {0, 1, 5}, {0, 5, 4}  // Top
-    // };
     const std::vector<std::vector<size_t>> faces = {
         {0, 3, 2, 1}, // Front
         {5, 6, 7, 4}, // Back
@@ -802,15 +794,12 @@ std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_cube_voronoi(g
     return cdlib::ConvexPolyhedron::build_dcel(vertices, faces);
 }
 
-std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_polyhedron_voronoi() {
+std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_polyhedron_voronoi(float alpha, float p_z, float h_vdz, float h_vdy) {
     // https://www.desmos.com/3d/b7bdf5b643
-    auto alpha = glm::radians(67.0f);
-    auto p_z = 0.5f;
-    auto h_vdz = -1.0f;
-    auto h_vdy = -1.3f;
+    auto alpha_rad = glm::radians(alpha);
 
     auto n1 = glm::vec3(0, 1, 0);
-    auto n2 = glm::vec3(0, n1.y * cos(alpha) - n1.z * sin(alpha), n1.y * sin(alpha) + n1.z * cos(alpha));
+    auto n2 = glm::vec3(0, n1.y * cos(alpha_rad) - n1.z * sin(alpha_rad), n1.y * sin(alpha_rad) + n1.z * cos(alpha_rad));
 
     auto a = glm::vec3(2, 1, p_z);
     auto b = glm::vec3(-2, 1, p_z);
@@ -832,9 +821,9 @@ std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_polyhedron_vor
 
     const std::vector<std::vector<size_t>> faces = {
         {0, 2, 3, 1},
-        {0, 1, 5, 4},
-        {3, 2, 4, 5},
-        {0, 4, 2},
+        {4, 0, 1, 5},
+        {5, 3, 2, 4},
+        {4, 2, 0},
         {1, 3, 5}
     };
 
@@ -920,6 +909,59 @@ bool Application::test_voronoi_planes() {
     for (size_t i = 0; i < 8; i++) {
         in_region_test(cube, glm::vec3(0, 0, 0), 2, i, false);
     }
+
+    // Polyhedron tests
+    const auto polyhedron = create_test_polyhedron_voronoi();
+
+    // Face tests
+    unique_in_region_test(polyhedron, glm::vec3(-1.1, 2.5, 0), 0, 0);
+    unique_in_region_test(polyhedron, glm::vec3(1.1, 1.1, -0.5), 0, 0);
+
+    unique_in_region_test(polyhedron, glm::vec3(-1.3, -0.2, 4.5), 0, 1);
+    unique_in_region_test(polyhedron, glm::vec3(0.5, 1.8, 3.5), 0, 1);
+
+    unique_in_region_test(polyhedron, glm::vec3(0, -1.8, 0), 0, 2);
+    unique_in_region_test(polyhedron, glm::vec3(3.2, 0.5, 1.1), 0, 3);
+    unique_in_region_test(polyhedron, glm::vec3(-2.2, 0.9, -0.1), 0, 4);
+
+    // Edge tests
+    unique_in_region_test(polyhedron, glm::vec3(-2.5, 1.9, 0.25), 1, 2);
+    unique_in_region_test(polyhedron, glm::vec3(0.5, 2, 1.5), 1, 3);
+    unique_in_region_test(polyhedron, glm::vec3(-1.5, 1.9, 3.0), 1, 3);
+    unique_in_region_test(polyhedron, glm::vec3(-1.3, -0.9, 4.5), 1, 7);
+    unique_in_region_test(polyhedron, glm::vec3(0, -1.75, 2.25), 1, 7);
+    unique_in_region_test(polyhedron, glm::vec3(2.5, -1.75, 1.25), 1, 10);
+
+    // Vertex tests
+    unique_in_region_test(polyhedron, glm::vec3(2.5, 1.75, 1.25), 2, 0);
+    unique_in_region_test(polyhedron, glm::vec3(-3, 1.75, 1.35), 2, 1);
+    unique_in_region_test(polyhedron, glm::vec3(3.5, 1.75, -1.35), 2, 2);
+    unique_in_region_test(polyhedron, glm::vec3(-2.5, -1.75, 2.75), 2, 5);
+
+//    // Border tests
+//    // - Test if the point (0.5, 1.75, 1) lies in the face 0 and edge 0 and no other feature
+//    in_region_test(polyhedron, glm::vec3(0.5, 1.75, 1), 0, 0, true);
+//    in_region_test(polyhedron, glm::vec3(0.5, 1.75, 1), 1, 0, true);
+//    for (size_t type = 0; type < 3; type++) {
+//        const auto max_idx = type == 0 ? polyhedron->faces.size() : (type == 1 ? polyhedron->hedges.size() : polyhedron->vertices.size());
+//        for (size_t i = 0; i < max_idx; i++) {
+//            if (type == 0 && i == 0) continue;
+//            if (type == 1 && i == 0) continue;
+//            in_region_test(polyhedron, glm::vec3(0.5, 1.75, 1), type, i, false);
+//        }
+//    }
+//
+//    // = Test if the point (0, 1.78146225698, 2.8410097069) lies in the face 1 and edge 0 and no other feature
+//    in_region_test(polyhedron, glm::vec3(0, 1.78146225698, 2.8410097069), 0, 1, true);
+//    in_region_test(polyhedron, glm::vec3(0, 1.78146225698, 2.8410097069), 1, 0, true);
+//    for (size_t type = 0; type < 3; type++) {
+//        const auto max_idx = type == 0 ? polyhedron->faces.size() : (type == 1 ? polyhedron->hedges.size() : polyhedron->vertices.size());
+//        for (size_t i = 0; i < max_idx; i++) {
+//            if (type == 0 && i == 1) continue;
+//            if (type == 1 && i == 0) continue;
+//            in_region_test(polyhedron, glm::vec3(0, 1.78146225698, 2.8410097069), type, i, false);
+//        }
+//    }
 
     return result;
 }
