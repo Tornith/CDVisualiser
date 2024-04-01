@@ -55,9 +55,11 @@ namespace cdlib {
             }
 
             // Create face
-            const auto normal = normalize(cross(vertices[face_indices[1]] - vertices[face_indices[0]], vertices[face_indices[2]] - vertices[face_indices[0]]));
-            const auto d = dot(normal, vertices[face_indices[0]]);
-            const auto face = std::make_shared<Face>(Plane(normal, d));
+            const auto v1 = vertices[face_indices[1]] - vertices[face_indices[0]];
+            const auto v2 = vertices[face_indices[2]] - vertices[face_indices[0]];
+            const auto c = cross(v1, v2);
+            const auto normal = normalize(c);
+            const auto face = std::make_shared<Face>(Plane(normal, vertices[face_indices[0]]));
             face->edges = face_edges;
 
             // Set the face of the edges and the next and prev pointers
@@ -97,7 +99,6 @@ namespace cdlib {
     }
 
     std::vector<std::shared_ptr<Feature>> HalfEdge::get_neighbours() const {
-        // An edge has 4 neighbours: The two vertices, the face and the twin's face
         return {start, end, face, twin->face};
     }
 }

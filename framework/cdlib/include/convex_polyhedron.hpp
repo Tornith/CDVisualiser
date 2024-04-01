@@ -22,7 +22,7 @@ namespace cdlib {
 
         Plane(const glm::vec3& normal, const glm::vec3& point)
             : normal(normal),
-              d(-dot(normal, point)) {
+              d(dot(normal, point)) {
         }
 
         friend bool operator==(const Plane& lhs, const Plane& rhs) = default;
@@ -33,7 +33,7 @@ namespace cdlib {
         }
 
         [[nodiscard]] float distance_to(const glm::vec3& point) const {
-            return dot(normal, point) + d;
+            return dot(normal, point) - d;
         }
 
         [[nodiscard]] bool is_above(const glm::vec3& point) const {
@@ -41,6 +41,10 @@ namespace cdlib {
         }
 
         [[nodiscard]] float get_intersection_parameter(const glm::vec3& point_a, const glm::vec3& point_b) const;
+
+        [[nodiscard]] Plane operator-() const {
+            return {-normal, -d};
+        }
     };
 
     struct Feature {

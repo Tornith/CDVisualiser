@@ -766,14 +766,14 @@ void Application::run_tests() {
 std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_cube_voronoi(glm::mat4 model_matrix) {
     // Vertices array
     std::vector vertices = {
-        glm::vec3(1, 1, 1),
         glm::vec3(-1, 1, 1),
-        glm::vec3(-1, -1, 1),
+        glm::vec3(1, 1, 1),
         glm::vec3(1, -1, 1),
-        glm::vec3(1, 1, -1),
+        glm::vec3(-1, -1, 1),
         glm::vec3(-1, 1, -1),
-        glm::vec3(-1, -1, -1),
-        glm::vec3(1, -1, -1)
+        glm::vec3(1, 1, -1),
+        glm::vec3(1, -1, -1),
+        glm::vec3(-1, -1, -1)
     };
 
     // Transform the vertices
@@ -792,11 +792,11 @@ std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_cube_voronoi(g
     // };
     const std::vector<std::vector<size_t>> faces = {
         {0, 3, 2, 1}, // Front
-        {4, 5, 6, 7}, // Back
+        {5, 6, 7, 4}, // Back
         {1, 2, 6, 5}, // Right
-        {0, 4, 7, 3}, // Left
-        {3, 7, 6, 2}, // Bottom
-        {0, 1, 5, 4}  // Top
+        {4, 7, 3, 0}, // Left
+        {4, 0, 1, 5}, // Top
+        {3, 7, 6, 2} // Bottom
     };
 
     return cdlib::ConvexPolyhedron::build_dcel(vertices, faces);
@@ -843,60 +843,69 @@ std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_polyhedron_vor
 
 bool Application::test_voronoi_planes() {
     bool result = true;
-    auto in_region_test = [&result](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx, bool expected) {
+    auto inner_test = [&result](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx) {
         if (type == 0) {
             const auto face = object->faces[idx];
-            const auto face_result = cdlib::Voronoi::in_voronoi_region(face, point);
-            result &= face_result == expected;
+            return cdlib::Voronoi::in_voronoi_region(face, point);
         }
         else if (type == 1) {
             const auto hedge = object->hedges[idx];
-            const auto edge_result = cdlib::Voronoi::in_voronoi_region(hedge, point);
-            result &= edge_result == expected;
+            return cdlib::Voronoi::in_voronoi_region(hedge, point);
         }
         else if (type == 2) {
             const auto vertex = object->vertices[idx];
-            const auto vertex_result = cdlib::Voronoi::in_voronoi_region(vertex, point);
-            result &= vertex_result == expected;
+            return cdlib::Voronoi::in_voronoi_region(vertex, point);
         }
+        return false;
     };
 
-    // Plane tests
-    // //  - Test if the point (0, 1, 0) lies in the face
-    // in_region_test(plane, glm::vec3(0, 1, 0), 0, 0, true);
-    // //  - Test if the point (-2, 1, 0) does not lie in the face
-    // in_region_test(plane, glm::vec3(-2, 1, 0), 0, 0, false);
-    // //  - Test if the point (0, -1, 0) lies in the face
-    // in_region_test(plane, glm::vec3(0, -1, 0), 0, 0, true);
-    // //  - Test if the point (0, 0, 0) lies in the face
-    // in_region_test(plane, glm::vec3(0, 0, 0), 0, 0, true);
-    // //  - Test if the point (0, 0, 1.5) does not lie in the face
-    // in_region_test(plane, glm::vec3(0, 0, 1.5), 0, 0, false);
-    // //  - Test if the point (1.1, 0.5, 1.1) does not lie in the face
-    // in_region_test(plane, glm::vec3(1.1, 0.5, 1.1), 0, 0, false);
+    auto in_region_test = [&result, inner_test](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx, bool expected) {
+        result = result && inner_test(object, point, type, idx) == expected;
+    };
+
+    auto unique_in_region_test = [&result, inner_test](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx) {
+        // Check if the point lies in the tested region and not any other
+        for (size_t i_type = 0; i_type < 3; i_type++) {
+            const auto max_idx = i_type == 0 ? object->faces.size() : (i_type == 1 ? object->hedges.size() : object->vertices.size());
+            for (size_t i_idx = 0; i_idx < max_idx; i_idx++) {
+                if (i_type == type && i_idx == idx) {
+                    result = result && inner_test(object, point, i_type, i_idx);
+                }
+                else {
+                    // Check if the selected feature is not a twin edge of the checked edge
+                    if (type == 1){
+                        const auto hedge = object->hedges[idx];
+                        const auto twin = object->hedges[i_idx]->twin;
+                        if (i_type == 1 && twin == hedge)
+                            continue;
+                    }
+                    result = result && !inner_test(object, point, i_type, i_idx);
+                }
+            }
+        }
+    };
 
     const auto cube = create_test_cube_voronoi();
 
     // Cube face tests
-    //  - Test if the point (0, 2, 0) lies in the face 5
-    in_region_test(cube, glm::vec3(0, 2, 0), 0, 4, true);
+    //  - Test if the point (0, 2, 0) lies in the face 4
+    unique_in_region_test(cube, glm::vec3(0, 2, 0), 0, 4);
     //  - Test if the point (2, 2, 2) does not lie in any face
     for (size_t i = 0; i < 6; i++) {
         in_region_test(cube, glm::vec3(2, 2, 2), 0, i, false);
     }
-    //  - Test if the point (-1.5, 0, 0) lies in the face 3 and 4
-    in_region_test(cube, glm::vec3(-1.5, 0, 0), 0, 2, true);
-    in_region_test(cube, glm::vec3(-1.5, 0, 0), 0, 3, true);
-    //  - Test if the point (0, 0, 0) lies in all faces
+    //  - Test if the point (-1.5, 0, 0) lies in the face 3
+    unique_in_region_test(cube, glm::vec3(-1.5, 0, 0), 0, 3);
+    //  - Test if the point (0, 0, 0) lies in no face
     for (size_t i = 0; i < 6; i++) {
-        in_region_test(cube, glm::vec3(0, 0, 0), 0, i, true);
+        in_region_test(cube, glm::vec3(0, 0, 0), 0, i, false);
     }
 
     // Cube edge tests
-     // - Test if the point (1.5, 1.5, 0) lies in the edge 5
-    in_region_test(cube, glm::vec3(1.5, 1.5, 0), 1, 4, true);
-    //  - Test if the point (0, -5, -2) lies in the edge 11
-    in_region_test(cube, glm::vec3(0, -5, -2), 1, 10, true);
+    // - Test if the point (1.5, 1.5, 0) lies in the edge 11
+    unique_in_region_test(cube, glm::vec3(1.5, 1.5, 0), 1, 11);
+    //  - Test if the point (0, -5, -2) lies in the edge 5
+    unique_in_region_test(cube, glm::vec3(0, -5, -2), 1, 5);
     //  - Test if the point (0, 12.5, 0) does not lie in any edge
     for (size_t i = 0; i < 12; i++) {
         in_region_test(cube, glm::vec3(0, 12.5, 0), 1, i, false);
@@ -904,17 +913,13 @@ bool Application::test_voronoi_planes() {
 
     // Vertex tests
     //  - Test if the point (1.2, 1.1, 1.5) lies in the vertex 1
-    in_region_test(cube, glm::vec3(1.2, 1.1, 1.5), 2, 0, true);
-    // - Test if the point (45, -33, 10) lies in the vertex 4
-    in_region_test(cube, glm::vec3(45, -33, 10), 2, 3, true);
+    unique_in_region_test(cube, glm::vec3(1.2, 1.1, 1.5), 2, 1);
+    // - Test if the point (45, -33, 10) lies in the vertex 2
+    unique_in_region_test(cube, glm::vec3(45, -33, 10), 2, 2);
     // - Test if the point (0, 0, 0) doesn't lie in any vertex
     for (size_t i = 0; i < 8; i++) {
         in_region_test(cube, glm::vec3(0, 0, 0), 2, i, false);
     }
-
-
-    // Clip edge tests
-
 
     return result;
 }

@@ -5,7 +5,9 @@
 
 namespace cdlib::Voronoi {
     VoronoiPlane get_voronoi_plane(const std::shared_ptr<Vertex>& vertex, const std::shared_ptr<HalfEdge>& edge) {
-        const glm::vec3 face_normal = normalize(edge->end->position - edge->start->position);
+        const auto other = edge->start == vertex ? *edge->end : *edge->start;
+        const glm::vec3 edge_direction = normalize(vertex->position - other.position);
+        const glm::vec3 face_normal = normalize(edge_direction);
 
         return {Plane(face_normal, vertex->position), vertex, edge};
     }
@@ -16,38 +18,10 @@ namespace cdlib::Voronoi {
 
         // The voronoi plane is perpendicular to the face normal and the edge direction
         const glm::vec3 plane_normal = normalize(cross(face_normal, edge_direction));
-
-        return {Plane(plane_normal, dot(plane_normal, face->plane.normal)), face, edge};
+        return {Plane(plane_normal, edge->start->position), face, edge};
     }
 
-    std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature, const std::shared_ptr<HalfEdge>& edge) {
-        // If the feature is an edge, return nullopt
-        if (std::dynamic_pointer_cast<HalfEdge>(feature)){
-            return std::nullopt;
-        }
-
-        const auto neighbours = feature->get_neighbours();
-
-        auto it = std::ranges::find_if(neighbours, [&edge](const auto& neighbour){
-            return *neighbour == *edge;
-        });
-
-        if (it == neighbours.end()){
-            return std::nullopt;
-        }
-
-        if (const auto casted_face = std::dynamic_pointer_cast<Face>(feature)){
-            return get_voronoi_plane(casted_face, edge);
-        }
-
-        if (const auto casted_vertex = std::dynamic_pointer_cast<Vertex>(feature)){
-            return get_voronoi_plane(casted_vertex, edge);
-        }
-
-        return std::nullopt;
-    }
-
-    std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature_1, const std::shared_ptr<Feature>& feature_2) {
+    std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature_1, const std::shared_ptr<Feature>& feature_2, bool invert) {
         // Get which feature is the edge and which is the other
         const auto first = std::dynamic_pointer_cast<HalfEdge>(feature_1);
         const auto second = std::dynamic_pointer_cast<HalfEdge>(feature_2);
@@ -56,39 +30,21 @@ namespace cdlib::Voronoi {
             return std::nullopt;
         }
 
-        return first ? get_voronoi_plane_safe(feature_2, first) : get_voronoi_plane_safe(feature_1, second);
-    }
+        const auto edge = first ? first : second;
+        const auto feature = first ? feature_2 : feature_1;
 
-    // bool Face::in_voronoi_region(const glm::vec3& point) const {
-    //     const auto shared_face = std::make_shared<Face>(*this);
-    //     return Voronoi::in_voronoi_region(shared_face, point);
-    // }
-    //
-    // bool Vertex::in_voronoi_region(const glm::vec3& point) const {
-    //     const auto shared_vertex = std::make_shared<Vertex>(*this);
-    //     return Voronoi::in_voronoi_region(shared_vertex, point);
-    // }
-    //
-    // bool Edge::in_voronoi_region(const glm::vec3& point) const {
-    //     // Create a shared_ptr from the edge
-    //     const auto shared_edge = std::make_shared<Edge>(*this);
-    //
-    //     // For all the neightbours of the edge, get their voronoi planes
-    //     // and check if the point is in the positive half-space of all of them
-    //     return std::ranges::all_of(neighbours, [&point, &shared_edge](const std::shared_ptr<Feature>& neighbour){
-    //         // Attempt to cast to either a face or a vertex
-    //         if (const auto casted_face = std::dynamic_pointer_cast<Face>(neighbour)){
-    //             auto a = get_voronoi_plane(casted_face, shared_edge, true); // Inverse the normal, because we want the plane to be facing towards the edge
-    //             return a.is_above(point);
-    //         }
-    //         // If it's not a face, it must be a vertex
-    //         if (const auto casted_vertex = std::dynamic_pointer_cast<Vertex>(neighbour)){
-    //             auto a = get_voronoi_plane(casted_vertex, shared_edge, true); // Inverse the normal, because we want the plane to be facing towards the edge
-    //             return a.is_above(point);
-    //         }
-    //         throw std::runtime_error("Invalid neighbour type");
-    //     });
-    // }
+        if (const auto casted_face = std::dynamic_pointer_cast<Face>(feature)){
+            const auto plane = get_voronoi_plane(casted_face, edge);
+            return invert ? -plane : plane;
+        }
+
+        if (const auto casted_vertex = std::dynamic_pointer_cast<Vertex>(feature)){
+            const auto plane = get_voronoi_plane(casted_vertex, edge);
+            return invert ? -plane : plane;
+        }
+
+        return std::nullopt;
+    }
 
     ClipData clip_edge(const std::shared_ptr<Feature>& feature, const std::shared_ptr<HalfEdge>& edge) {
         auto is_clipped = true;
