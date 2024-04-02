@@ -807,7 +807,7 @@ std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_polyhedron_vor
     auto d1 = glm::dot(n1, a);
     auto d2 = glm::dot(n2, a);
 
-    auto v_dyz = -n2.y * h_vdy + d2;
+    auto v_dyz = (-n2.y * h_vdy + d2) / n2.z;
 
     // Create the vertices
     const std::vector vertices = {
@@ -868,7 +868,8 @@ bool Application::test_voronoi_planes() {
                         if (i_type == 1 && twin == hedge)
                             continue;
                     }
-                    result = result && !inner_test(object, point, i_type, i_idx);
+                    const auto inner_result = inner_test(object, point, i_type, i_idx);
+                    result = result && !inner_result;
                 }
             }
         }
@@ -938,40 +939,26 @@ bool Application::test_voronoi_planes() {
     unique_in_region_test(polyhedron, glm::vec3(3.5, 1.75, -1.35), 2, 2);
     unique_in_region_test(polyhedron, glm::vec3(-2.5, -1.75, 2.75), 2, 5);
 
-//    // Border tests
-//    // - Test if the point (0.5, 1.75, 1) lies in the face 0 and edge 0 and no other feature
-//    in_region_test(polyhedron, glm::vec3(0.5, 1.75, 1), 0, 0, true);
-//    in_region_test(polyhedron, glm::vec3(0.5, 1.75, 1), 1, 0, true);
-//    for (size_t type = 0; type < 3; type++) {
-//        const auto max_idx = type == 0 ? polyhedron->faces.size() : (type == 1 ? polyhedron->hedges.size() : polyhedron->vertices.size());
-//        for (size_t i = 0; i < max_idx; i++) {
-//            if (type == 0 && i == 0) continue;
-//            if (type == 1 && i == 0) continue;
-//            in_region_test(polyhedron, glm::vec3(0.5, 1.75, 1), type, i, false);
-//        }
-//    }
-//
-//    // = Test if the point (0, 1.78146225698, 2.8410097069) lies in the face 1 and edge 0 and no other feature
-//    in_region_test(polyhedron, glm::vec3(0, 1.78146225698, 2.8410097069), 0, 1, true);
-//    in_region_test(polyhedron, glm::vec3(0, 1.78146225698, 2.8410097069), 1, 0, true);
-//    for (size_t type = 0; type < 3; type++) {
-//        const auto max_idx = type == 0 ? polyhedron->faces.size() : (type == 1 ? polyhedron->hedges.size() : polyhedron->vertices.size());
-//        for (size_t i = 0; i < max_idx; i++) {
-//            if (type == 0 && i == 1) continue;
-//            if (type == 1 && i == 0) continue;
-//            in_region_test(polyhedron, glm::vec3(0, 1.78146225698, 2.8410097069), type, i, false);
-//        }
-//    }
-
     return result;
 }
 
 bool Application::test_clip_edge() {
+    bool result = true;
+    auto inner_test = [&result](const std::shared_ptr<cdlib::HalfEdge> edge, const std::shared_ptr<cdlib::Feature> feature, const bool expected_is_clipped, const float expected_lambda_l, const float expected_lambda_h, const std::shared_ptr<cdlib::Feature> expected_neighbour_l, const std::shared_ptr<cdlib::Feature> expected_neighbour_h) {
+        auto clip_data = cdlib::Voronoi::clip_edge(edge, feature);
+        const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h] = clip_data;
+        result = result && is_clipped == expected_is_clipped;
+        result = result && std::abs(lambda_l - expected_lambda_l) < 1e-6;
+        result = result && std::abs(lambda_h - expected_lambda_h) < 1e-6;
+        result = result && neighbour_l == expected_neighbour_l;
+        result = result && neighbour_h == expected_neighbour_h;
+    };
+
     const auto polyhedron = create_test_polyhedron_voronoi();
 
-    const auto edge_1 = cdlib::HalfEdge::create(glm::vec3(-1.5, 3, -1), glm::vec3(0.5, 2, 1.5));
-    // Clip against edge 3
-    const auto clipped_1 = cdlib::Voronoi::clip_edge(edge_1, polyhedron->hedges[3]);
+    const auto edge_1 = cdlib::HalfEdge::create(glm::vec3(-1.5, 3, -1), glm::vec3(0.5, 1.5, 3.5));
 
-    return false;
+    inner_test(edge_1, polyhedron->hedges[3], true, 0.444444, 0.835436, polyhedron->faces[0], polyhedron->faces[1]);
+
+    return result;
 }

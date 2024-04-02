@@ -21,24 +21,33 @@ namespace cdlib::Voronoi {
         return {Plane(plane_normal, edge->start->position), face, edge};
     }
 
-    std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature_1, const std::shared_ptr<Feature>& feature_2, bool invert) {
+    std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature, const std::shared_ptr<Feature>& neighbour) {
         // Get which feature is the edge and which is the other
-        const auto first = std::dynamic_pointer_cast<HalfEdge>(feature_1);
-        const auto second = std::dynamic_pointer_cast<HalfEdge>(feature_2);
+        auto feature_edge = std::dynamic_pointer_cast<HalfEdge>(feature);
+        const auto neighbour_edge = std::dynamic_pointer_cast<HalfEdge>(neighbour);
 
-        if ((!first && !second) || (first && second)){
+        // If neither or both are edges, return nothing
+        if ((!feature_edge && !neighbour_edge) || (feature_edge && neighbour_edge)){
             return std::nullopt;
         }
 
-        const auto edge = first ? first : second;
-        const auto feature = first ? feature_2 : feature_1;
+        // If feature is an edge set the invert flag
+        const auto invert = static_cast<bool>(feature_edge);
 
-        if (const auto casted_face = std::dynamic_pointer_cast<Face>(feature)){
+        // If the feature is an edge and the neighbour is a face, swap for twin if the neighbour is the twin's face
+        if (feature_edge && std::dynamic_pointer_cast<Face>(neighbour) == feature_edge->twin->face){
+            feature_edge = feature_edge->twin;
+        }
+
+        const auto edge = feature_edge ? feature_edge : neighbour_edge;
+        const auto other = feature_edge ? neighbour : feature;
+
+        if (const auto casted_face = std::dynamic_pointer_cast<Face>(other)){
             const auto plane = get_voronoi_plane(casted_face, edge);
             return invert ? -plane : plane;
         }
 
-        if (const auto casted_vertex = std::dynamic_pointer_cast<Vertex>(feature)){
+        if (const auto casted_vertex = std::dynamic_pointer_cast<Vertex>(other)){
             const auto plane = get_voronoi_plane(casted_vertex, edge);
             return invert ? -plane : plane;
         }
@@ -46,16 +55,18 @@ namespace cdlib::Voronoi {
         return std::nullopt;
     }
 
-    ClipData clip_edge(const std::shared_ptr<Feature>& feature, const std::shared_ptr<HalfEdge>& edge) {
+    ClipData clip_edge(const std::shared_ptr<HalfEdge>& edge, const std::shared_ptr<Feature>& feature) {
         auto is_clipped = true;
         float lambda_l = 0;
         float lambda_h = 1;
         std::shared_ptr<Feature> neighbour_l = nullptr;
         std::shared_ptr<Feature> neighbour_h = nullptr;
 
-        const auto [head, tail] = std::pair{edge->start->position, edge->end->position};
+        // The original paper calculates the points in reverse order
+        const auto head = edge->end->position;
+        const auto tail = edge->start->position;
 
-        // For all feature-edge voronoi plane
+        // For all voronoi planes of the feature
         for (const auto& neighbour : feature->get_neighbours()){
             const auto voronoi_plane = get_voronoi_plane_safe(feature, neighbour);
             if (!voronoi_plane){
@@ -75,7 +86,7 @@ namespace cdlib::Voronoi {
             }
 
             // Case 2: Tail is below the plane, head is above the plane
-            if (distance_head > 0 && distance_tail < 0){
+            if (distance_head >= 0 && distance_tail < 0){
                 const float lambda = distance_tail / (distance_tail - distance_head);
                 if (lambda > lambda_l){
                     lambda_l = lambda;
@@ -89,7 +100,7 @@ namespace cdlib::Voronoi {
             }
 
             // Case 3: Head is below the plane, tail is above the plane
-            else if (distance_head < 0 && distance_tail > 0){
+            else if (distance_head < 0 && distance_tail >= 0){
                 const float lambda = distance_tail / (distance_tail - distance_head);
                 if (lambda < lambda_h){
                     lambda_h = lambda;

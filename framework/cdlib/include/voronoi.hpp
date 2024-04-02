@@ -36,7 +36,7 @@ namespace cdlib::Voronoi {
     [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Vertex>& vertex, const std::shared_ptr<HalfEdge>& edge);
     [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Face>& face, const std::shared_ptr<HalfEdge>& edge);
 
-    [[nodiscard]] std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature_1, const std::shared_ptr<Feature>& feature_2, bool invert = false);
+    [[nodiscard]] std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature, const std::shared_ptr<Feature>& neighbour);
 
     template <typename T> requires IsFeature<T>
     [[nodiscard]] bool in_voronoi_region(const std::shared_ptr<T>& feature, const glm::vec3& point) {
@@ -59,20 +59,5 @@ namespace cdlib::Voronoi {
         return base && above;
     }
 
-    template <>
-    [[nodiscard]] inline bool in_voronoi_region<HalfEdge>(const std::shared_ptr<HalfEdge>& feature, const glm::vec3& point) {
-        const auto neighbours = feature->get_neighbours();
-        return std::ranges::all_of(neighbours, [&feature, &point](const std::shared_ptr<Feature>& neighbour){
-            // If the neighbour is twin's face, then use the twin instead
-            const auto twin = feature->twin;
-            const auto plane = get_voronoi_plane_safe(neighbour == twin->face ? feature->twin : feature, neighbour, true);
-            if (!plane){
-                std::cerr << "Feature does not have a valid edge neighbour" << std::endl;
-                return false;
-            }
-            return plane->is_above(point);
-        });
-    }
-
-    [[nodiscard]] ClipData clip_edge(const std::shared_ptr<Feature>& feature, const std::shared_ptr<HalfEdge>& edge);
+    [[nodiscard]] ClipData clip_edge(const std::shared_ptr<HalfEdge>& edge, const std::shared_ptr<Feature>& feature);
 }
