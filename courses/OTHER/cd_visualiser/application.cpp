@@ -944,11 +944,12 @@ bool Application::test_voronoi_planes() {
 
 bool Application::test_clip_edge() {
     bool result = true;
+
     auto inner_test = [&result](const glm::vec3 start, const glm::vec3 end, const std::shared_ptr<cdlib::Feature> feature, const bool expected_is_clipped, const float expected_lambda_l, const float expected_lambda_h, const std::shared_ptr<cdlib::Feature> expected_neighbour_l, const std::shared_ptr<cdlib::Feature> expected_neighbour_h) {
         const auto edge = cdlib::HalfEdge::create(start, end);
         auto clip_data = cdlib::Voronoi::clip_edge(edge, feature);
         const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h] = clip_data;
-        result = result && is_clipped == expected_is_clipped;
+        result = result && (is_clipped == expected_is_clipped);
         result = result && std::abs(lambda_l - expected_lambda_l) < 1e-6;
         result = result && std::abs(lambda_h - expected_lambda_h) < 1e-6;
         result = result && neighbour_l == expected_neighbour_l;
@@ -960,6 +961,9 @@ bool Application::test_clip_edge() {
     inner_test(glm::vec3(-1.5, 3, -1), glm::vec3(0.5, 1.5, 3.5), polyhedron->hedges[3], true, 0.444444f, 0.835436f, polyhedron->faces[0], polyhedron->faces[1]);
     inner_test(glm::vec3(-0.33,2,0.25), glm::vec3(0.5,4.5,3.5), polyhedron->hedges[3], true, 0.230769f, 1.0f, polyhedron->faces[0], nullptr);
     inner_test(glm::vec3(-2.53,1,3.25), glm::vec3(0.5,4.5,3.5), polyhedron->faces[1], true, 0.174917491749f, 0.281408880626f, polyhedron->hedges[6], polyhedron->hedges[5]);
-
+    inner_test(glm::vec3(0.5,4.5,3.5), glm::vec3(-3.53,1,3.25), polyhedron->faces[1], false, 0.718591119374f, 0.620347394541f, polyhedron->hedges[5], polyhedron->hedges[6]);
+    inner_test(glm::vec3(0.5,4.5,3.5), glm::vec3(-1.53,2.5,3.25), polyhedron->faces[1], false, 0.0f, 1.0f, polyhedron->hedges[5], polyhedron->hedges[5]);
+    inner_test(glm::vec3(-2.75,4.5,-0.5), glm::vec3(-2.53,-2.5,3.25), polyhedron->vertices[1], true, 0.4f, 0.481473f, polyhedron->hedges[15], polyhedron->hedges[6]);
+    inner_test(glm::vec3(-2.75,4.5,3.5), glm::vec3(-2.53,2.5,3.25), polyhedron->vertices[1], true, 0.0f, 1.0f, nullptr, nullptr);
     return result;
 }
