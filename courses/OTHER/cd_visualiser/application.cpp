@@ -65,6 +65,8 @@ void Application::prepare_collision_detectors() {
     gjk = cdlib::SteppableGJKEPA(object_1->collider, object_2->collider);
     recalculate_minkowski_difference();
 
+    vclip = cdlib::VClip(object_1->collider, object_2->collider);
+
     auto colliders = std::ranges::transform_view(convex_objects, [](std::shared_ptr<ConvexObject>& convex_object) { return convex_object->collider; });
     auto colliders_vector = std::vector<std::shared_ptr<cdlib::Collider>>(std::begin(colliders), std::end(colliders));
     sap = cdlib::SAP(colliders_vector);
@@ -97,7 +99,6 @@ void Application::prepare_convex_objects() {
     auto s2 = SceneObject{g2, ModelUBO(m2), green_material_ubo};
 
     auto o1 = ConvexObject{ std::move(v1), m1, c1, s1 };
-
     auto o2 = ConvexObject{ std::move(v2), m2, c2, s2 };
 
     object_1 = std::make_shared<ConvexObject>(std::move(o1));
@@ -652,7 +653,24 @@ void Application::render_ui() {
         }
     }
     else if (selected_method == CollisionDetectionMethod::V_CLIP) {
-
+        if (!auto_calculate_collision) {
+            // Button for manual collision calculation
+            if (ImGui::Button("Calculate collision")) {
+                const auto collision_data = vclip.get_collision_data();
+                std::cout << "Collision: " << collision_data.has_value() << std::endl;
+                if (collision_data.has_value()) {
+                    const auto& result_data = collision_data.value();
+                    std::cout << " - Distance: " << -result_data.depth << std::endl;
+                }
+            }
+        }
+        else {
+            auto result = vclip.get_collision_data();
+            if (result.has_value()) {
+                const auto& result_data = result.value();
+                ImGui::Text("Distance: %f", -result_data.depth);
+            }
+        }
     }
     else if (selected_method == CollisionDetectionMethod::AABBTREE) {
 
@@ -775,6 +793,9 @@ void Application::on_resize(int width, int height) {
     camera_ubo.update_opengl_data();
 }
 
+/**************
+ * Unit tests *
+ **************/
 
 void Application::run_tests() {
     std::cout << "Voronoi Planes: " << test_voronoi_planes() << std::endl;
@@ -966,7 +987,7 @@ bool Application::test_clip_edge() {
     auto inner_test = [&result](const glm::vec3 start, const glm::vec3 end, const std::shared_ptr<cdlib::Feature> feature, const bool expected_is_clipped, const float expected_lambda_l, const float expected_lambda_h, const std::shared_ptr<cdlib::Feature> expected_neighbour_l, const std::shared_ptr<cdlib::Feature> expected_neighbour_h) {
         const auto edge = cdlib::HalfEdge::create(start, end);
         auto clip_data = clip_edge(edge, feature);
-        const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h] = clip_data;
+        const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h, p1, p2] = clip_data;
         result = result && (is_clipped == expected_is_clipped);
         result = result && std::abs(lambda_l - expected_lambda_l) < 1e-6;
         result = result && std::abs(lambda_h - expected_lambda_h) < 1e-6;

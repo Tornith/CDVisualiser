@@ -52,7 +52,10 @@ namespace cdlib {
         }
     };
 
+    struct ConvexPolyhedron;
+
     struct Feature {
+        std::shared_ptr<ConvexPolyhedron> polyhedron;
         virtual ~Feature() = default;
 
         friend bool operator==(const Feature& lhs, const Feature& rhs) = default;
@@ -110,6 +113,10 @@ namespace cdlib {
 
         friend bool operator==(const HalfEdge& lhs, const HalfEdge& rhs) = default;
         friend bool operator!=(const HalfEdge& lhs, const HalfEdge& rhs) = default;
+
+        [[nodiscard]] glm::vec3 get_direction() const {
+            return end->position - start->position;
+        }
 
         [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_neighbours() const override;
 

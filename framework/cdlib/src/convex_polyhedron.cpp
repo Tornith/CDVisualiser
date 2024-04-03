@@ -20,19 +20,21 @@ namespace cdlib {
     }
 
     std::shared_ptr<ConvexPolyhedron> ConvexPolyhedron::build_dcel(const std::vector<glm::vec3>& vertices, const std::vector<std::vector<size_t>>& faces) {
-        ConvexPolyhedron polyhedron;
+        const auto polyhedron = std::make_shared<ConvexPolyhedron>();
         const auto edge_count = vertices.size() + faces.size() - 2; // Euler characteristic: V - E + F = 2 => E = V + F - 2
 
-        polyhedron.vertices.reserve(vertices.size());
-        polyhedron.faces.reserve(faces.size());
-        polyhedron.hedges.reserve(edge_count * 2); // Each edge has a twin
+        polyhedron->vertices.reserve(vertices.size());
+        polyhedron->faces.reserve(faces.size());
+        polyhedron->hedges.reserve(edge_count * 2); // Each edge has a twin
 
         // Twin edge map
         std::unordered_map<std::pair<size_t, size_t>, std::shared_ptr<HalfEdge>> edge_map;
 
         // Create vertices
         for (const auto& vertex : vertices) {
-            polyhedron.vertices.emplace_back(std::make_shared<Vertex>(vertex));
+            const auto vertex_ptr = std::make_shared<Vertex>(vertex);
+            vertex_ptr->polyhedron = polyhedron;
+            polyhedron->vertices.emplace_back(vertex_ptr);
         }
 
         // Create faces and edges
@@ -45,13 +47,14 @@ namespace cdlib {
                 const auto i1 = face_indices[i];
                 const auto i2 = face_indices[(i + 1) % face_indices.size()];
 
-                const auto edge = std::make_shared<HalfEdge>(polyhedron.vertices[i1], polyhedron.vertices[i2]);
+                const auto edge = std::make_shared<HalfEdge>(polyhedron->vertices[i1], polyhedron->vertices[i2]);
                 edge_map[{i1, i2}] = edge;
+                edge->polyhedron = polyhedron;
                 face_edges.emplace_back(edge);
-                polyhedron.hedges.emplace_back(edge);
+                polyhedron->hedges.emplace_back(edge);
 
                 // Add the edge to the start vertex
-                polyhedron.vertices[i1]->edges.emplace_back(edge);
+                polyhedron->vertices[i1]->edges.emplace_back(edge);
             }
 
             // Create face
@@ -60,6 +63,7 @@ namespace cdlib {
             const auto c = cross(v1, v2);
             const auto normal = normalize(c);
             const auto face = std::make_shared<Face>(Plane(normal, vertices[face_indices[0]]));
+            face->polyhedron = polyhedron;
             face->edges = face_edges;
 
             // Set the face of the edges and the next and prev pointers
@@ -71,7 +75,7 @@ namespace cdlib {
             }
 
             // Add the face to the polyhedron
-            polyhedron.faces.emplace_back(face);
+            polyhedron->faces.emplace_back(face);
         }
 
         // Set the twin pointers
@@ -87,7 +91,7 @@ namespace cdlib {
         }
 
         // Return the polyhedron
-        return std::make_shared<ConvexPolyhedron>(polyhedron);
+        return polyhedron;
     }
 
     std::vector<std::shared_ptr<Feature>> Face::get_neighbours() const {

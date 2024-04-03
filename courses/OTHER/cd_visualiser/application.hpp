@@ -101,7 +101,7 @@ protected:
     bool show_minkowski_difference = false;
 
     // V-Clip Specific
-    // cdlib::VClip vclip;
+    cdlib::VClip vclip;
 
     // AABBTREE Specific
 
@@ -193,7 +193,7 @@ public:
     // Testing
     // ----------------------------------------------------------------------------
 public:
-    void run_tests();
+    static void run_tests();
 
     static std::shared_ptr<cdlib::ConvexPolyhedron> create_test_cube_voronoi(glm::mat4 model_matrix = glm::mat4(1.0f));
     static std::shared_ptr<cdlib::ConvexPolyhedron> create_test_polyhedron_voronoi(float alpha = 67.0f, float p_z = 1.0f, float h_vdz = -1.0f, float h_vdy = -1.3f);
