@@ -25,14 +25,6 @@ namespace cdlib::Voronoi {
         }
     };
 
-    struct ClipData {
-        bool is_clipped;
-        float lambda_l;
-        float lambda_h;
-        std::shared_ptr<Feature> neighbour_l;
-        std::shared_ptr<Feature> neighbour_h;
-    };
-
     [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Vertex>& vertex, const std::shared_ptr<HalfEdge>& edge);
     [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Face>& face, const std::shared_ptr<HalfEdge>& edge);
 
@@ -58,6 +50,4 @@ namespace cdlib::Voronoi {
         const auto above = feature->plane.is_above(point);
         return base && above;
     }
-
-    [[nodiscard]] ClipData clip_edge(const std::shared_ptr<HalfEdge>& edge, const std::shared_ptr<Feature>& feature);
 }

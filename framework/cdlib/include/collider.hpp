@@ -1,12 +1,15 @@
 #pragma once
 
 #include <numeric>
+#include <ranges>
 #include <vector>
 #include <glm/glm.hpp>
+#include "convex_polyhedron.hpp"
+
 namespace cdlib {
     class Collider {
     protected:
-        std::vector<glm::vec3> vertices;
+        std::shared_ptr<ConvexPolyhedron> shape;
         glm::mat4 transform{};
         std::pair<glm::vec3, glm::vec3> aabb;
 
@@ -16,24 +19,24 @@ namespace cdlib {
     public:
         Collider() = default;
 
-        explicit Collider(const std::vector<glm::vec3>& vertices) : vertices(vertices) {
+        explicit Collider(const std::shared_ptr<ConvexPolyhedron>& shape) : shape(shape) {
             aabb = calculate_aabb(get_global_vertices());
             transform = glm::mat4(1.0);
         }
 
-        Collider(const std::vector<glm::vec3>& vertices, const glm::mat4& transform) : vertices(vertices), transform(transform) {
+        Collider(const std::shared_ptr<ConvexPolyhedron>& shape, const glm::mat4& transform) : shape(shape), transform(transform) {
             aabb = calculate_aabb(get_global_vertices());
         }
 
         virtual ~Collider() = default;
 
         Collider(const Collider& other) = default;
-        Collider(Collider&& other) noexcept : vertices(std::move(other.vertices)), aabb(other.aabb) {}
+        Collider(Collider&& other) noexcept : shape(std::move(other.shape)), aabb(other.aabb) {}
 
         Collider& operator=(const Collider& other) {
             if (this == &other)
                 return *this;
-            vertices = other.vertices;
+            shape = other.shape;
             aabb = other.aabb;
             return *this;
         }
@@ -41,13 +44,13 @@ namespace cdlib {
         Collider& operator=(Collider&& other) noexcept {
             if (this == &other)
                 return *this;
-            vertices = std::move(other.vertices);
+            shape = std::move(other.shape);
             aabb = other.aabb;
             return *this;
         }
 
-        [[nodiscard]] const std::vector<glm::vec3>& get_local_vertices() const {
-            return vertices;
+        [[nodiscard]] std::vector<std::shared_ptr<Vertex>> get_local_vertices() const {
+            return shape->vertices;
         }
 
         [[nodiscard]] const glm::mat4& get_transform_matrix() const {
@@ -59,19 +62,17 @@ namespace cdlib {
             Collider::transform = transform;
         }
 
-        [[nodiscard]] const std::vector<glm::vec3>& get_global_vertices() {
+        [[nodiscard]] std::vector<glm::vec3> get_global_vertices() {
             if (is_cache_valid) {
                 return cached_global_vertices;
             }
 
-            std::vector<glm::vec3> global_vertices;
-            global_vertices.reserve(vertices.size());
-            for (const auto& vertex : vertices) {
-                global_vertices.emplace_back(transform * glm::vec4(vertex, 1.f));
-            }
+            const auto view = std::ranges::views::transform(shape->vertices, [this](const auto& vertex) {
+                return glm::vec3(transform * glm::vec4(vertex->position, 1.0));
+            });
 
             is_cache_valid = true;
-            cached_global_vertices = global_vertices;
+            cached_global_vertices = std::vector(view.begin(), view.end());
 
             return cached_global_vertices;
         }
@@ -80,12 +81,12 @@ namespace cdlib {
             if (is_cache_valid) {
                 return cached_global_vertices[index];
             }
-            return transform * glm::vec4(vertices[index], 1.f);
+            return transform * glm::vec4(shape->vertices[index]->position, 1.f);
         }
 
-        virtual void set_vertices(const std::vector<glm::vec3>& vertices) {
+        virtual void set_shape(const std::shared_ptr<ConvexPolyhedron>& shape) {
+            Collider::shape = shape;
             is_cache_valid = false;
-            Collider::vertices = vertices;
         }
 
         [[nodiscard]] virtual glm::vec3 support(const glm::vec3& direction) const = 0;
@@ -103,7 +104,7 @@ namespace cdlib {
         }
 
         void update_aabb() {
-            aabb = calculate_aabb(vertices);
+            aabb = calculate_aabb(shape->vertices);
         }
 
         static std::pair<glm::vec3, glm::vec3> calculate_aabb(const std::vector<glm::vec3>& vertices) {
@@ -117,18 +118,30 @@ namespace cdlib {
 
             return { min, max };
         }
+
+        static std::pair<glm::vec3, glm::vec3> calculate_aabb(const std::vector<std::shared_ptr<Vertex>>& vertices) {
+            glm::vec3 min = vertices[0]->position;
+            glm::vec3 max = vertices[0]->position;
+
+            for (const auto& vertex : vertices) {
+                min = glm::min(min, vertex->position);
+                max = glm::max(max, vertex->position);
+            }
+
+            return { min, max };
+        }
     };
 
     class ConvexCollider final : public Collider {
     public:
         ConvexCollider() = default;
 
-        explicit ConvexCollider(const std::vector<glm::vec3>& vertices)
-            : Collider(vertices) {
+        explicit ConvexCollider(const std::shared_ptr<ConvexPolyhedron>& shape)
+            : Collider(shape) {
         }
 
-        ConvexCollider(const std::vector<glm::vec3>& vertices, const glm::mat4& transform)
-            : Collider(vertices, transform) {
+        ConvexCollider(const std::shared_ptr<ConvexPolyhedron>& shape, const glm::mat4& transform)
+            : Collider(shape, transform) {
         }
 
         ~ConvexCollider() override = default;
@@ -154,18 +167,18 @@ namespace cdlib {
 
         [[nodiscard]] glm::vec3 support(const glm::vec3& direction) const override {
             // Find the vertex that is the furthest in the given direction
-            float max_dot = glm::dot(vertices[0], direction);
+            float max_dot = glm::dot(shape->vertices[0]->position, direction);
             size_t max_index = 0;
 
             // Start loop at 1 as we've already calculated for vertex 0
-            for (size_t i = 1; i < vertices.size(); i++) {
-                const float dot = glm::dot(vertices[i], direction);
+            for (size_t i = 1; i < shape->vertices.size(); i++) {
+                const float dot = glm::dot(shape->vertices[i]->position, direction);
                 if (dot > max_dot) {
                     max_dot = dot;
                     max_index = i;
                 }
             }
-            return vertices[max_index];
+            return shape->vertices[max_index]->position;
         }
     };
 }

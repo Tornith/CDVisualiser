@@ -20,6 +20,11 @@ namespace cdlib {
               d(d) {
         }
 
+        explicit Plane(const glm::vec4& vec)
+            : normal(vec),
+              d(vec.w) {
+        }
+
         Plane(const glm::vec3& normal, const glm::vec3& point)
             : normal(normal),
               d(dot(normal, point)) {

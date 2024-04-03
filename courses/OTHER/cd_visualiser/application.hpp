@@ -7,6 +7,7 @@
 
 #include "QuickHull.hpp"
 #include "sap.hpp"
+#include "vclip.hpp"
 #include "voronoi.hpp"
 
 class ColliderAppWrapper {
@@ -100,6 +101,7 @@ protected:
     bool show_minkowski_difference = false;
 
     // V-Clip Specific
+    // cdlib::VClip vclip;
 
     // AABBTREE Specific
 
@@ -130,10 +132,11 @@ public:
 
     static std::vector<std::array<float, 3>> random_points(int seed);
     // std::pair<Geometry, std::vector<float>> random_convex_geometry(const std::vector<std::array<float, 3>>& points);
-    static std::pair<std::shared_ptr<Geometry>, std::vector<float>> generate_convex_hull_geometry(const std::vector<glm::vec3>& points);
-    static std::pair<std::shared_ptr<Geometry>, std::vector<float>> generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points);
+    static std::tuple<std::shared_ptr<Geometry>, std::vector<float>, std::vector<uint32_t>> generate_convex_hull_geometry(const std::vector<glm::vec3>& points);
+    static std::tuple<std::shared_ptr<Geometry>, std::vector<float>, std::vector<uint32_t>> generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points);
 
     static std::vector<glm::vec3> get_positions_from_buffer(const std::vector<float>& buffer);
+    static std::vector<std::vector<size_t>> get_faces_from_buffer(const std::vector<uint32_t>& buffer);
 
     static std::vector<glm::vec3> get_minkowski_difference_positions(const std::vector<glm::vec3>& positions_1, const std::vector<glm::vec3>& positions_2);
 
@@ -195,6 +198,6 @@ public:
     static std::shared_ptr<cdlib::ConvexPolyhedron> create_test_cube_voronoi(glm::mat4 model_matrix = glm::mat4(1.0f));
     static std::shared_ptr<cdlib::ConvexPolyhedron> create_test_polyhedron_voronoi(float alpha = 67.0f, float p_z = 1.0f, float h_vdz = -1.0f, float h_vdy = -1.3f);
 
-    bool test_voronoi_planes();
-    bool test_clip_edge();
+    static bool test_voronoi_planes();
+    static bool test_clip_edge();
 };

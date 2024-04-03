@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "utils.hpp"
+#include "vclip.hpp"
 #include "voronoi.hpp"
 
 #include "glm/gtx/hash.hpp"
@@ -73,8 +74,8 @@ void Application::prepare_convex_objects() {
     convex_objects.clear();
 
     // Create main objects (which can be moved)
-    auto [g1, v1] = generate_convex_hull_geometry(random_points(object_seed_1));
-    auto [g2, v2] = generate_convex_hull_geometry(random_points(object_seed_2));
+    auto [g1, v1, i1] = generate_convex_hull_geometry(random_points(object_seed_1));
+    auto [g2, v2, i2] = generate_convex_hull_geometry(random_points(object_seed_2));
 
     auto p1 = get_positions_from_buffer(v1);
     auto p2 = get_positions_from_buffer(v2);
@@ -82,8 +83,15 @@ void Application::prepare_convex_objects() {
     auto m1 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance));
     auto m2 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance));
 
-    auto c1 = std::make_shared<cdlib::ConvexCollider>(p1, m1);
-    auto c2 = std::make_shared<cdlib::ConvexCollider>(p2, m2);
+    // Convert indicies to array of faces
+    auto faces1 = get_faces_from_buffer(i1);
+    auto faces2 = get_faces_from_buffer(i2);
+
+    auto shape1 = cdlib::ConvexPolyhedron::build_dcel(p1, faces1);
+    auto shape2 = cdlib::ConvexPolyhedron::build_dcel(p2, faces2);
+
+    auto c1 = std::make_shared<cdlib::ConvexCollider>(shape1, m1);
+    auto c2 = std::make_shared<cdlib::ConvexCollider>(shape2, m2);
 
     auto s1 = SceneObject{g1, ModelUBO(m1), red_material_ubo};
     auto s2 = SceneObject{g2, ModelUBO(m2), green_material_ubo};
@@ -101,10 +109,12 @@ void Application::prepare_convex_objects() {
     // Randomly generate extra objects
     for (int i = 0; i < extra_object_count; i++) {
         auto seed = extra_object_seed * extra_object_count + i;
-        auto [g, v] = generate_convex_hull_geometry(random_points(seed));
+        auto [g, v, index] = generate_convex_hull_geometry(random_points(seed));
         auto p = pseudorandom_point(seed);
         auto m = translate(glm::mat4(1.0f), p);
-        auto c = std::make_shared<cdlib::ConvexCollider>(get_positions_from_buffer(v), m);
+        auto faces = get_faces_from_buffer(index);
+        auto shape = cdlib::ConvexPolyhedron::build_dcel(get_positions_from_buffer(v), faces);
+        auto c = std::make_shared<cdlib::ConvexCollider>(shape, m);
         auto s = SceneObject{g, ModelUBO(m), white_material_ubo};
         auto o = ConvexObject{ std::move(v), m, c, s };
         convex_objects.push_back(std::make_shared<ConvexObject>(std::move(o)));
@@ -151,7 +161,7 @@ void Application::recalculate_minkowski_difference() {
     }
 
     auto pm = get_minkowski_difference_positions(object_1->collider->get_global_vertices(), object_2->collider->get_global_vertices());
-    auto [gm, vm] = generate_convex_hull_geometry(pm);
+    auto [gm, vm, _] = generate_convex_hull_geometry(pm);
 
     auto mm = glm::mat4(1.0f); // The vertices are already in world space
 
@@ -177,7 +187,7 @@ std::vector<std::array<float, 3>> Application::random_points(int seed) {
     return points;
 }
 
-std::pair<std::shared_ptr<Geometry>, std::vector<float>> Application::generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points) {
+std::tuple<std::shared_ptr<Geometry>, std::vector<float>, std::vector<uint32_t>> Application::generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points) {
     quickhull::QuickHull<float> qh;
 
     // Convert points to std::vector<quickhull::Vector3<float>>
@@ -245,10 +255,10 @@ std::pair<std::shared_ptr<Geometry>, std::vector<float>> Application::generate_c
         indexBuffer32.push_back(static_cast<uint32_t>(index));
     }
 
-    return {std::make_shared<Geometry>(GL_TRIANGLES, 14, static_cast<int>(vertices.size() / 14), vertices.data(), static_cast<int>(indexBuffer32.size()), indexBuffer32.data()), vertices};
+    return {std::make_shared<Geometry>(GL_TRIANGLES, 14, static_cast<int>(vertices.size() / 14), vertices.data(), static_cast<int>(indexBuffer32.size()), indexBuffer32.data()), vertices, indexBuffer32};
 }
 
-std::pair<std::shared_ptr<Geometry>, std::vector<float>> Application::generate_convex_hull_geometry(const std::vector<glm::vec3>& points) {
+std::tuple<std::shared_ptr<Geometry>, std::vector<float>, std::vector<uint32_t>> Application::generate_convex_hull_geometry(const std::vector<glm::vec3>& points) {
     auto converted = std::vector<std::array<float, 3>>(points.size());
     for (size_t i = 0; i < points.size(); i++) {
         converted[i] = {points[i].x, points[i].y, points[i].z};
@@ -262,6 +272,14 @@ std::vector<glm::vec3> Application::get_positions_from_buffer(const std::vector<
         positions.emplace_back(buffer[i], buffer[i + 1], buffer[i + 2]);
     }
     return positions;
+}
+
+std::vector<std::vector<size_t>> Application::get_faces_from_buffer(const std::vector<uint32_t>& buffer) {
+    std::vector<std::vector<size_t>> faces;
+    for (size_t i = 0; i < buffer.size(); i += 3) {
+        faces.push_back({buffer[i], buffer[i + 1], buffer[i + 2]});
+    }
+    return faces;
 }
 
 std::vector<glm::vec3> Application::get_minkowski_difference_positions(const std::vector<glm::vec3>&positions_1, const std::vector<glm::vec3>&positions_2) {
@@ -947,7 +965,7 @@ bool Application::test_clip_edge() {
 
     auto inner_test = [&result](const glm::vec3 start, const glm::vec3 end, const std::shared_ptr<cdlib::Feature> feature, const bool expected_is_clipped, const float expected_lambda_l, const float expected_lambda_h, const std::shared_ptr<cdlib::Feature> expected_neighbour_l, const std::shared_ptr<cdlib::Feature> expected_neighbour_h) {
         const auto edge = cdlib::HalfEdge::create(start, end);
-        auto clip_data = cdlib::Voronoi::clip_edge(edge, feature);
+        auto clip_data = clip_edge(edge, feature);
         const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h] = clip_data;
         result = result && (is_clipped == expected_is_clipped);
         result = result && std::abs(lambda_l - expected_lambda_l) < 1e-6;
