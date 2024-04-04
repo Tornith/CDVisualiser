@@ -14,7 +14,7 @@ namespace cdlib::Voronoi {
 
     struct VoronoiPlane final : Plane {
         // The face/vertex that the plane is associated with
-        std::variant<std::shared_ptr<Face>, std::shared_ptr<Vertex>> feature;
+        std::shared_ptr<Feature> feature;
         // The edge that the plane is associated with
         std::shared_ptr<HalfEdge> edge;
 
@@ -31,23 +31,52 @@ namespace cdlib::Voronoi {
     [[nodiscard]] std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature, const std::shared_ptr<Feature>& neighbour);
 
     template <typename T> requires IsFeature<T>
-    [[nodiscard]] bool in_voronoi_region(const std::shared_ptr<T>& feature, const glm::vec3& point) {
+    [[nodiscard]] std::pair<bool, std::optional<VoronoiPlane>> in_voronoi_region(const std::shared_ptr<T>& feature, const glm::vec3& point) {
         const auto neighbours = feature->get_neighbours();
-        return std::ranges::all_of(neighbours, [&feature, &point](const std::shared_ptr<Feature>& neighbour){
+        for (const auto& neighbour : neighbours) {
             const auto plane = get_voronoi_plane_safe(feature, neighbour);
-            if (!plane){
+            if (!plane) {
                 std::cerr << "Feature does not have a valid edge neighbour" << std::endl;
-                return false;
+                return {false, std::nullopt};
             }
-            return plane->is_above(point);
-        });
+            if (!plane->is_above(point)) {
+                return {false, plane};
+            }
+        }
+        return {true, std::nullopt};
     }
 
     template <>
-    [[nodiscard]] inline bool in_voronoi_region<Face>(const std::shared_ptr<Face>& feature, const glm::vec3& point) {
+    [[nodiscard]] inline std::pair<bool, std::optional<VoronoiPlane>> in_voronoi_region<Face>(const std::shared_ptr<Face>& feature, const glm::vec3& point) {
         // Run the same code as the general case and check if the point is above the face itself
-        const auto base = in_voronoi_region<Feature>(feature, point);
-        const auto above = feature->plane.is_above(point);
-        return base && above;
+        if (auto base = in_voronoi_region<Feature>(feature, point); !base.first) {
+            return base;
+        }
+        if (!feature->plane.is_above(point)) {
+            return {false, VoronoiPlane{feature->plane, feature, nullptr}};
+        }
+        return {true, std::nullopt};
+    }
+
+    template <typename T> requires IsFeature<T>
+    [[nodiscard]] std::optional<VoronoiPlane> find_maximally_violating_voronoi_plane(const std::shared_ptr<T>& feature, const glm::vec3& point) {
+        const auto neighbours = feature->get_neighbours();
+        auto max_plane = std::optional<VoronoiPlane>{};
+        auto max_distance = std::numeric_limits<float>::max();
+
+        for (const auto& neighbour : neighbours) {
+            const auto plane = get_voronoi_plane_safe(feature, neighbour);
+            if (!plane) {
+                std::cerr << "Feature does not have a valid edge neighbour" << std::endl;
+                continue;
+            }
+            const auto distance = plane->distance_to(point);
+            if (distance < 0 && distance < max_distance) {
+                max_distance = distance;
+                max_plane = plane;
+            }
+        }
+
+        return max_plane;
     }
 }

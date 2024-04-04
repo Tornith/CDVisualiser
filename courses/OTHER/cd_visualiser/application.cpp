@@ -871,7 +871,7 @@ std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_polyhedron_vor
 
 bool Application::test_voronoi_planes() {
     bool result = true;
-    auto inner_test = [&result](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx) {
+    auto inner_test = [](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx) -> std::pair<bool, std::optional<cdlib::Voronoi::VoronoiPlane>> {
         if (type == 0) {
             const auto face = object->faces[idx];
             return cdlib::Voronoi::in_voronoi_region(face, point);
@@ -884,11 +884,11 @@ bool Application::test_voronoi_planes() {
             const auto vertex = object->vertices[idx];
             return cdlib::Voronoi::in_voronoi_region(vertex, point);
         }
-        return false;
+        return std::make_pair(false, std::nullopt);
     };
 
     auto in_region_test = [&result, inner_test](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx, bool expected) {
-        result = result && inner_test(object, point, type, idx) == expected;
+        result = result && inner_test(object, point, type, idx).first == expected;
     };
 
     auto unique_in_region_test = [&result, inner_test](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx) {
@@ -897,7 +897,7 @@ bool Application::test_voronoi_planes() {
             const auto max_idx = i_type == 0 ? object->faces.size() : (i_type == 1 ? object->hedges.size() : object->vertices.size());
             for (size_t i_idx = 0; i_idx < max_idx; i_idx++) {
                 if (i_type == type && i_idx == idx) {
-                    result = result && inner_test(object, point, i_type, i_idx);
+                    result = result && inner_test(object, point, i_type, i_idx).first;
                 }
                 else {
                     // Check if the selected feature is not a twin edge of the checked edge
@@ -908,7 +908,7 @@ bool Application::test_voronoi_planes() {
                             continue;
                     }
                     const auto inner_result = inner_test(object, point, i_type, i_idx);
-                    result = result && !inner_result;
+                    result = result && !inner_result.first;
                 }
             }
         }

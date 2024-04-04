@@ -7,6 +7,7 @@
 #include "collision_data.hpp"
 #include "collision_detector.hpp"
 #include "convex_polyhedron.hpp"
+#include "voronoi.hpp"
 
 namespace cdlib{
     enum VClipState {
@@ -76,16 +77,26 @@ namespace cdlib{
             return *this;
         }
 
-        template<typename T = Feature> requires std::is_base_of_v<Feature, T>
+        template<typename T = Feature> requires Voronoi::IsFeature<T>
         [[nodiscard]] const std::shared_ptr<T>& primary_feature() const {
             const auto primary = primary_feature_index == 0 ? feature_1 : feature_2;
             return std::dynamic_pointer_cast<T>(primary);
         }
 
-        template<typename T = Feature> requires std::is_base_of_v<Feature, T>
+        template<typename T = Feature> requires Voronoi::IsFeature<T>
         [[nodiscard]] const std::shared_ptr<T>& secondary_feature() const {
             const auto secondary = primary_feature_index == 0 ? feature_2 : feature_1;
             return std::dynamic_pointer_cast<T>(secondary);
+        }
+
+        template<typename T> requires Voronoi::IsFeature<T>
+        [[nodiscard]] const std::shared_ptr<T>& get_feature() const {
+            if (std::dynamic_pointer_cast<T>(feature_1)) {
+                return std::dynamic_pointer_cast<T>(feature_1);
+            } else if (std::dynamic_pointer_cast<T>(feature_2)) {
+                return std::dynamic_pointer_cast<T>(feature_2);
+            }
+            return nullptr;
         }
 
         void set_primary_feature(const std::shared_ptr<Feature>& feature) {
@@ -104,16 +115,41 @@ namespace cdlib{
             }
         }
 
+        template<typename T> requires Voronoi::IsFeature<T>
+        void set_feature(const std::shared_ptr<Feature>& feature) {
+            if (std::dynamic_pointer_cast<T>(feature_1)) {
+                feature_1 = feature;
+            } else {
+                feature_2 = feature;
+            }
+        }
+
+        template<typename T> requires Voronoi::IsFeature<T>
+        void set_feature_as_primary() {
+            if (std::dynamic_pointer_cast<T>(feature_1)) {
+                primary_feature_index = 0;
+            } else {
+                primary_feature_index = 1;
+            }
+        }
+
         [[nodiscard]] VClipState get_state() const {
             return state;
         }
 
         ~VClip() override = default;
 
-        void post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h);
-        void post_clip_derivative_check(const ClipData& clip_data);
+        bool post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h);
+        bool post_clip_derivative_check(const ClipData& clip_data);
 
         [[nodiscard]] VClipState handle_local_minimum();
+
+        // States
+        [[nodiscard]] VClipState execute_vertex_vertex();
+        [[nodiscard]] VClipState execute_vertex_edge();
+        [[nodiscard]] VClipState execute_vertex_face();
+        [[nodiscard]] VClipState execute_edge_edge();
+        [[nodiscard]] VClipState execute_edge_face();
 
         [[nodiscard]] std::optional<CollisionData> get_collision_data() override;
     };
