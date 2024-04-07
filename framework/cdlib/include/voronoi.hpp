@@ -9,9 +9,6 @@
 #include "convex_polyhedron.hpp"
 
 namespace cdlib::Voronoi {
-    template <typename T>
-    concept IsFeature = std::is_base_of_v<Feature, T>;
-
     struct VoronoiPlane final : Plane {
         // The face/vertex that the plane is associated with
         std::shared_ptr<Feature> feature;

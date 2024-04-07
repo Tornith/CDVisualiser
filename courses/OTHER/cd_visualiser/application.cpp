@@ -984,7 +984,7 @@ bool Application::test_voronoi_planes() {
 bool Application::test_clip_edge() {
     bool result = true;
 
-    auto inner_test = [&result](const glm::vec3 start, const glm::vec3 end, const std::shared_ptr<cdlib::Feature> feature, const bool expected_is_clipped, const float expected_lambda_l, const float expected_lambda_h, const std::shared_ptr<cdlib::Feature> expected_neighbour_l, const std::shared_ptr<cdlib::Feature> expected_neighbour_h) {
+    auto inner_test = [&result](const glm::vec3 start, const glm::vec3 end, const std::shared_ptr<cdlib::Feature>& feature, const bool expected_is_clipped, const float expected_lambda_l, const float expected_lambda_h, const std::shared_ptr<cdlib::Feature> expected_neighbour_l, const std::shared_ptr<cdlib::Feature> expected_neighbour_h) {
         const auto edge = cdlib::HalfEdge::create(start, end);
         auto clip_data = clip_edge(edge, feature);
         const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h, p1, p2] = clip_data;

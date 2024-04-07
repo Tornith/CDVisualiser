@@ -62,6 +62,17 @@ namespace cdlib {
         friend bool operator!=(const Feature& lhs, const Feature& rhs) = default;
 
         [[nodiscard]] virtual std::vector<std::shared_ptr<Feature>> get_neighbours() const = 0;
+
+        template <typename T> requires std::is_base_of_v<Feature, T>
+        [[nodiscard]] std::vector<std::shared_ptr<T>> get_neighbours() const {
+            const auto neighbours = get_neighbours();
+            std::vector<std::shared_ptr<T>> casted_neighbours;
+            casted_neighbours.reserve(neighbours.size());
+            for (const auto& neighbour : neighbours) {
+                casted_neighbours.emplace_back(std::dynamic_pointer_cast<T>(neighbour));
+            }
+            return casted_neighbours;
+        }
     };
 
     struct HalfEdge;
@@ -119,14 +130,27 @@ namespace cdlib {
         }
 
         [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_neighbours() const override;
+        [[nodiscard]] std::vector<std::shared_ptr<Face>> get_neighbour_faces() const;
+        [[nodiscard]] std::vector<std::shared_ptr<Vertex>> get_neighbour_vertices() const;
 
         static std::shared_ptr<HalfEdge> create(const glm::vec3& start, const glm::vec3& end);
     };
 
+    // Pointer aliases
+    using FeatureP = std::shared_ptr<Feature>;
+    using VertexP = std::shared_ptr<Vertex>;
+    using FaceP = std::shared_ptr<Face>;
+    using HalfEdgeP = std::shared_ptr<HalfEdge>;
+
+    // Templates
+    template <typename T>
+    concept IsFeature = std::is_base_of_v<Feature, T>;
+
+    // Convex polyhedron class
     struct ConvexPolyhedron {
-        std::vector<std::shared_ptr<Vertex>> vertices;
-        std::vector<std::shared_ptr<Face>> faces;
-        std::vector<std::shared_ptr<HalfEdge>> hedges;
+        std::vector<VertexP> vertices;
+        std::vector<FaceP> faces;
+        std::vector<HalfEdgeP> hedges;
 
         ConvexPolyhedron() = default;
 

@@ -4,66 +4,8 @@
 
 namespace cdlib
 {
-    ClipData clip_edge(const std::shared_ptr<HalfEdge>& edge, const std::shared_ptr<Feature>& feature) {
-        auto is_clipped = true;
-        float lambda_l = 0;
-        float lambda_h = 1;
-        std::shared_ptr<Feature> neighbour_l = nullptr;
-        std::shared_ptr<Feature> neighbour_h = nullptr;
-
-        // The original paper calculates the points in reverse order
-        const auto head = edge->end->position;
-        const auto tail = edge->start->position;
-
-        // For all voronoi planes of the feature
-        for (const auto& neighbour : feature->get_neighbours()){
-            const auto voronoi_plane = Voronoi::get_voronoi_plane_safe(feature, neighbour);
-            if (!voronoi_plane){
-                continue;
-            }
-
-            // Get the distance of the edge points to the plane
-            const float distance_head = voronoi_plane->distance_to(head);
-            const float distance_tail = voronoi_plane->distance_to(tail);
-
-            // Case 1: Both the points are below the plane => no intersection, the neighbouring feature is 'closer'
-            if (distance_head < 0 && distance_tail < 0){
-                is_clipped = false;
-                neighbour_l = neighbour;
-                neighbour_h = neighbour;
-                break;
-            }
-
-            // Case 2: Tail is below the plane, head is above the plane
-            if (distance_head >= 0 && distance_tail < 0){
-                const float lambda = distance_tail / (distance_tail - distance_head);
-                if (lambda > lambda_l){
-                    lambda_l = lambda;
-                    neighbour_l = neighbour;
-                    // Check if the lower bound is greater than the upper bound
-                    if (lambda_l > lambda_h){
-                        is_clipped = false;
-                        break;
-                    }
-                }
-            }
-
-            // Case 3: Head is below the plane, tail is above the plane
-            else if (distance_head < 0 && distance_tail >= 0){
-                const float lambda = distance_tail / (distance_tail - distance_head);
-                if (lambda < lambda_h){
-                    lambda_h = lambda;
-                    neighbour_h = neighbour;
-                    // Check if the lower bound is greater than the upper bound
-                    if (lambda_l > lambda_h){
-                        is_clipped = false;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return {head, tail, is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h};
+    ClipData clip_edge(const std::shared_ptr<HalfEdge>& clipped_edge, const std::shared_ptr<Feature>& feature) {
+        return clip_edge(clipped_edge, feature, feature->get_neighbours());
     }
 
     bool VClip::post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h)
@@ -175,8 +117,8 @@ namespace cdlib
         auto d_max = std::numeric_limits<float>::min();
         std::shared_ptr<Face> face_max = nullptr;
 
-        const auto face = primary_feature<Face>();
-        const auto vertex = secondary_feature<Vertex>();
+        const auto face = get_feature<Face>();
+        const auto vertex = get_feature<Vertex>();
 
         // For all faces F' on F's polyhedron
         for (const auto& f : face->polyhedron->faces){
@@ -193,6 +135,17 @@ namespace cdlib
 
         set_primary_feature(face_max);
         return CONTINUE;
+    }
+
+    std::shared_ptr<Feature> VClip::closest_face_vertex_to_edge(const std::shared_ptr<HalfEdge>& edge, const std::shared_ptr<Face>& face) {
+        const auto face_edges = face->get_neighbours<HalfEdge>();
+
+        std::shared_ptr<Feature> closest_feature = nullptr;
+        auto min_distance = std::numeric_limits<float>::max();
+
+        for (const auto& face_edge : face_edges){
+
+        }
     }
 
     /**************
@@ -292,11 +245,55 @@ namespace cdlib
         const auto edge_1 = primary_feature<HalfEdge>();
         const auto edge_2 = secondary_feature<HalfEdge>();
 
-        
+        const auto clip_against_edge = [this](const std::shared_ptr<HalfEdge>& active_edge, const std::shared_ptr<HalfEdge>& other_edge, const auto set_function) {
+            // Clip the edge_2 against the edge_1's vertex-edge planes
+            const auto clip_data_vertex = clip_edge(other_edge, active_edge, active_edge->get_neighbour_vertices());
+            // If the edge_2 is completely beneath one of the vertex-edge planes
+            if (clip_data_vertex.neighbour_l != nullptr && clip_data_vertex.neighbour_l == clip_data_vertex.neighbour_h){
+                set_function(clip_data_vertex.neighbour_l);
+                return CONTINUE;
+            }
+
+            // Check derivatives
+            if (post_clip_derivative_check(clip_data_vertex)){
+                return CONTINUE;
+            }
+
+            // Clip the edge_2 against the edge_1's face-edge planes
+            const auto clip_data_face = clip_edge(other_edge, active_edge, active_edge->get_neighbour_faces(), clip_data_vertex);
+            // If the edge_2 is completely beneath one of the face-edge planes
+            if (clip_data_face.neighbour_l != nullptr && clip_data_face.neighbour_l == clip_data_face.neighbour_h){
+                set_function(clip_data_face.neighbour_l);
+                return CONTINUE;
+            }
+
+            // Check derivatives
+            if (post_clip_derivative_check(clip_data_face)){
+                return CONTINUE;
+            }
+            return DONE;
+        };
+
+        const auto result_1 = clip_against_edge(edge_1, edge_2, set_primary_feature);
+        if (result_1 != DONE) {
+            return result_1;
+        }
+
+        const auto result_2 = clip_against_edge(edge_2, edge_1, set_secondary_feature);
+        return result_2;
     }
 
     VClipState VClip::execute_edge_face() {
-        return VClipState::CONTINUE;
+        const auto edge = get_feature<HalfEdge>();
+        const auto face = get_feature<Face>();
+
+        // Clip the edge against the face
+        const auto clip_data = clip_edge(edge, face);
+
+        // If the edge is excluded
+        if (!clip_data.is_clipped) {
+
+        }
     }
 
     std::optional<CollisionData> VClip::get_collision_data() {
