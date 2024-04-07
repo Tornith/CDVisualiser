@@ -49,7 +49,7 @@ namespace cdlib {
             return *this;
         }
 
-        [[nodiscard]] std::vector<std::shared_ptr<Vertex>> get_local_vertices() const {
+        [[nodiscard]] std::vector<VertexP> get_local_vertices() const {
             return shape->vertices;
         }
 
@@ -89,6 +89,10 @@ namespace cdlib {
             is_cache_valid = false;
         }
 
+        [[nodiscard]] std::shared_ptr<ConvexPolyhedron> get_shape() const {
+            return shape;
+        }
+
         [[nodiscard]] virtual glm::vec3 support(const glm::vec3& direction) const = 0;
 
         [[nodiscard]] glm::vec3 global_support(const glm::vec3& direction) const {
@@ -119,7 +123,7 @@ namespace cdlib {
             return { min, max };
         }
 
-        static std::pair<glm::vec3, glm::vec3> calculate_aabb(const std::vector<std::shared_ptr<Vertex>>& vertices) {
+        static std::pair<glm::vec3, glm::vec3> calculate_aabb(const std::vector<VertexP>& vertices) {
             glm::vec3 min = vertices[0]->position;
             glm::vec3 max = vertices[0]->position;
 
@@ -129,6 +133,14 @@ namespace cdlib {
             }
 
             return { min, max };
+        }
+
+        [[nodiscard]] bool is_valid() const {
+            if (shape == nullptr) {
+                return false;
+            }
+            const auto is_empty = shape->vertices.empty();
+            return !is_empty;
         }
     };
 

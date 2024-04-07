@@ -6,7 +6,7 @@ namespace cdlib {
         float depth{};       // Depth of the collision
 
         // Features
-        std::shared_ptr<Feature> feature_1;
-        std::shared_ptr<Feature> feature_2;
+        FeatureP feature_1;
+        FeatureP feature_2;
     };
 }

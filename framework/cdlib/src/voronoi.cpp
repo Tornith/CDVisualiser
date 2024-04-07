@@ -4,7 +4,7 @@
 #include <stdexcept>
 
 namespace cdlib::Voronoi {
-    VoronoiPlane get_voronoi_plane(const std::shared_ptr<Vertex>& vertex, const std::shared_ptr<HalfEdge>& edge) {
+    VoronoiPlane get_voronoi_plane(const VertexP& vertex, const HalfEdgeP& edge) {
         const auto other = edge->start == vertex ? *edge->end : *edge->start;
         const glm::vec3 edge_direction = normalize(vertex->position - other.position);
         const glm::vec3 face_normal = normalize(edge_direction);
@@ -12,7 +12,7 @@ namespace cdlib::Voronoi {
         return {Plane(face_normal, vertex->position), vertex, edge};
     }
 
-    VoronoiPlane get_voronoi_plane(const std::shared_ptr<Face>& face, const std::shared_ptr<HalfEdge>& edge) {
+    VoronoiPlane get_voronoi_plane(const FaceP& face, const HalfEdgeP& edge) {
         const glm::vec3 edge_direction = normalize(edge->end->position - edge->start->position);
         const glm::vec3 face_normal = normalize(face->plane.normal);
 
@@ -21,7 +21,7 @@ namespace cdlib::Voronoi {
         return {Plane(plane_normal, edge->start->position), face, edge};
     }
 
-    std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature, const std::shared_ptr<Feature>& neighbour) {
+    std::optional<VoronoiPlane> get_voronoi_plane_safe(const FeatureP& feature, const FeatureP& neighbour) {
         // Get which feature is the edge and which is the other
         auto feature_edge = std::dynamic_pointer_cast<HalfEdge>(feature);
         const auto neighbour_edge = std::dynamic_pointer_cast<HalfEdge>(neighbour);

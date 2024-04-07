@@ -61,18 +61,27 @@ namespace cdlib {
         friend bool operator==(const Feature& lhs, const Feature& rhs) = default;
         friend bool operator!=(const Feature& lhs, const Feature& rhs) = default;
 
-        [[nodiscard]] virtual std::vector<std::shared_ptr<Feature>> get_neighbours() const = 0;
-
-        template <typename T> requires std::is_base_of_v<Feature, T>
+        template <typename T = Feature> requires std::is_base_of_v<Feature, T>
         [[nodiscard]] std::vector<std::shared_ptr<T>> get_neighbours() const {
-            const auto neighbours = get_neighbours();
+            const auto neighbours = get_base_neighbours();
+
+            // If T is a Feature, we don't need to cast
+            if constexpr (std::is_same_v<T, Feature>) {
+                return neighbours;
+            }
+
+            // Otherwise cast the neighbours to T
             std::vector<std::shared_ptr<T>> casted_neighbours;
             casted_neighbours.reserve(neighbours.size());
             for (const auto& neighbour : neighbours) {
                 casted_neighbours.emplace_back(std::dynamic_pointer_cast<T>(neighbour));
             }
+
             return casted_neighbours;
         }
+
+    protected:
+        [[nodiscard]] virtual std::vector<std::shared_ptr<Feature>> get_base_neighbours() const = 0;
     };
 
     struct HalfEdge;
@@ -92,7 +101,8 @@ namespace cdlib {
         friend bool operator==(const Face& lhs, const Face& rhs) = default;
         friend bool operator!=(const Face& lhs, const Face& rhs) = default;
 
-        [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_neighbours() const override;
+    protected:
+        [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_base_neighbours() const override;
     };
 
     struct Vertex final : Feature {
@@ -106,7 +116,8 @@ namespace cdlib {
         friend bool operator==(const Vertex& lhs, const Vertex& rhs) = default;
         friend bool operator!=(const Vertex& lhs, const Vertex& rhs) = default;
 
-        [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_neighbours() const override;
+    protected:
+        [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_base_neighbours() const override;
     };
 
     struct HalfEdge final : Feature {
@@ -129,11 +140,13 @@ namespace cdlib {
             return end->position - start->position;
         }
 
-        [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_neighbours() const override;
         [[nodiscard]] std::vector<std::shared_ptr<Face>> get_neighbour_faces() const;
         [[nodiscard]] std::vector<std::shared_ptr<Vertex>> get_neighbour_vertices() const;
 
         static std::shared_ptr<HalfEdge> create(const glm::vec3& start, const glm::vec3& end);
+
+    protected:
+        [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_base_neighbours() const override;
     };
 
     // Pointer aliases
@@ -142,7 +155,7 @@ namespace cdlib {
     using FaceP = std::shared_ptr<Face>;
     using HalfEdgeP = std::shared_ptr<HalfEdge>;
 
-    // Templates
+    // Concepts
     template <typename T>
     concept IsFeature = std::is_base_of_v<Feature, T>;
 

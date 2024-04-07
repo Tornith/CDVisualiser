@@ -656,6 +656,7 @@ void Application::render_ui() {
         if (!auto_calculate_collision) {
             // Button for manual collision calculation
             if (ImGui::Button("Calculate collision")) {
+                vclip.reset();
                 const auto collision_data = vclip.get_collision_data();
                 std::cout << "Collision: " << collision_data.has_value() << std::endl;
                 if (collision_data.has_value()) {

@@ -14,21 +14,22 @@ namespace cdlib{
         INIT,
         PENETRATION,
         CONTINUE,
-        DONE
+        DONE,
+        ERROR
     };
 
     struct ClipData {
         bool is_clipped;
         float lambda_l;
         float lambda_h;
-        std::shared_ptr<Feature> neighbour_l;
-        std::shared_ptr<Feature> neighbour_h;
+        FeatureP neighbour_l;
+        FeatureP neighbour_h;
 
         glm::vec3 point_l{};
         glm::vec3 point_h{};
 
-        ClipData(glm::vec3 start, glm::vec3 end, bool is_clipped, float lambda_l, float lambda_h, const std::shared_ptr<Feature>& neighbour_l,
-            const std::shared_ptr<Feature>& neighbour_h)
+        ClipData(glm::vec3 start, glm::vec3 end, bool is_clipped, float lambda_l, float lambda_h, const FeatureP& neighbour_l,
+            const FeatureP& neighbour_h)
             : is_clipped(is_clipped),
               lambda_l(lambda_l),
               lambda_h(lambda_h),
@@ -52,8 +53,8 @@ namespace cdlib{
     class VClip : NarrowCollisionDetector {
         VClipState state = INIT;
 
-        std::shared_ptr<Feature> feature_1;
-        std::shared_ptr<Feature> feature_2;
+        FeatureP feature_1;
+        FeatureP feature_2;
 
         uint_fast8_t primary_feature_index = 0;
     public:
@@ -86,19 +87,19 @@ namespace cdlib{
         }
 
         template<typename T = Feature> requires IsFeature<T>
-        [[nodiscard]] const std::shared_ptr<T>& primary_feature() const {
+        [[nodiscard]] std::shared_ptr<T> primary_feature() const {
             const auto primary = primary_feature_index == 0 ? feature_1 : feature_2;
             return std::dynamic_pointer_cast<T>(primary);
         }
 
         template<typename T = Feature> requires IsFeature<T>
-        [[nodiscard]] const std::shared_ptr<T>& secondary_feature() const {
+        [[nodiscard]] std::shared_ptr<T> secondary_feature() const {
             const auto secondary = primary_feature_index == 0 ? feature_2 : feature_1;
             return std::dynamic_pointer_cast<T>(secondary);
         }
 
         template<typename T> requires IsFeature<T>
-        [[nodiscard]] const std::shared_ptr<T>& get_feature() const {
+        [[nodiscard]] std::shared_ptr<T> get_feature() const {
             if (std::dynamic_pointer_cast<T>(feature_1)) {
                 return std::dynamic_pointer_cast<T>(feature_1);
             } else if (std::dynamic_pointer_cast<T>(feature_2)) {
@@ -107,7 +108,7 @@ namespace cdlib{
             return nullptr;
         }
 
-        void set_primary_feature(const std::shared_ptr<Feature>& feature) {
+        void set_primary_feature(const FeatureP& feature) {
             if (primary_feature_index == 0) {
                 feature_1 = feature;
             } else {
@@ -115,7 +116,7 @@ namespace cdlib{
             }
         }
 
-        void set_secondary_feature(const std::shared_ptr<Feature>& feature) {
+        void set_secondary_feature(const FeatureP& feature) {
             if (primary_feature_index == 0) {
                 feature_2 = feature;
             } else {
@@ -124,7 +125,7 @@ namespace cdlib{
         }
 
         template<typename T> requires IsFeature<T>
-        void set_feature(const std::shared_ptr<Feature>& feature) {
+        void set_feature(const FeatureP& feature) {
             if (std::dynamic_pointer_cast<T>(feature_1)) {
                 feature_1 = feature;
             } else {
@@ -147,34 +148,56 @@ namespace cdlib{
 
         ~VClip() override = default;
 
+        static std::optional<float> distance_derivative_sign(glm::vec3 edge_point, const HalfEdgeP& edge, const VertexP& vertex);
+        static std::optional<float> distance_derivative_sign(glm::vec3 edge_point, const HalfEdgeP& edge, const FaceP& face);
+
+        static std::optional<float> distance_derivative_sign(glm::vec3 edge_point, const HalfEdgeP& edge, const FeatureP& feature) {
+            if (std::dynamic_pointer_cast<Vertex>(feature)) {
+                return distance_derivative_sign(edge_point, edge, std::dynamic_pointer_cast<Vertex>(feature));
+            } if (std::dynamic_pointer_cast<Face>(feature)) {
+                return distance_derivative_sign(edge_point, edge, std::dynamic_pointer_cast<Face>(feature));
+            }
+            return std::nullopt;
+        }
+
+        static std::optional<float> distance_derivative_sign(const float lambda, const HalfEdgeP& edge, const FeatureP& feature) {
+            const auto edge_point = edge->start->position + lambda * edge->get_direction();
+            return distance_derivative_sign(edge_point, edge, feature);
+        }
+
         bool post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h);
         bool post_clip_derivative_check(const ClipData& clip_data);
 
         [[nodiscard]] VClipState handle_local_minimum();
 
-        [[nodiscard]] std::shared_ptr<Feature> closest_face_vertex_to_edge(const std::shared_ptr<HalfEdge>& edge, const std::shared_ptr<Face>& face);
+        [[nodiscard]] static VertexP closest_face_vertex_to_edge(const HalfEdgeP& edge, const FaceP& face);
 
         // States
+        [[nodiscard]] VClipState initialize();
         [[nodiscard]] VClipState execute_vertex_vertex();
         [[nodiscard]] VClipState execute_vertex_edge();
         [[nodiscard]] VClipState execute_vertex_face();
         [[nodiscard]] VClipState execute_edge_edge();
         [[nodiscard]] VClipState execute_edge_face();
 
+        [[nodiscard]] VClipState step();
+
+        void reset();
+
         [[nodiscard]] std::optional<CollisionData> get_collision_data() override;
     };
 
-    [[nodiscard]] ClipData clip_edge(const std::shared_ptr<HalfEdge>& clipped_edge, const std::shared_ptr<Feature>& feature);
+    [[nodiscard]] ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature);
 
     template<typename T> requires IsFeature<T>
-    [[nodiscard]] ClipData clip_edge(const std::shared_ptr<HalfEdge>& clipped_edge, const std::shared_ptr<Feature>& feature,
+    [[nodiscard]] ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature,
         const std::vector<std::shared_ptr<T>>& neighbours, const std::optional<ClipData>& previous_clip_data = std::nullopt) {
 
         auto is_clipped = true;
         float lambda_l = previous_clip_data.has_value() ? previous_clip_data->lambda_l : 0;
         float lambda_h = previous_clip_data.has_value() ? previous_clip_data->lambda_h : 1;
-        std::shared_ptr<Feature> neighbour_l = previous_clip_data.has_value() ? previous_clip_data->neighbour_l : nullptr;
-        std::shared_ptr<Feature> neighbour_h = previous_clip_data.has_value() ? previous_clip_data->neighbour_h : nullptr;
+        FeatureP neighbour_l = previous_clip_data.has_value() ? previous_clip_data->neighbour_l : nullptr;
+        FeatureP neighbour_h = previous_clip_data.has_value() ? previous_clip_data->neighbour_h : nullptr;
 
         // The original paper calculates the points in reverse order
         const auto head = clipped_edge->end->position;

@@ -28,7 +28,7 @@ namespace cdlib {
         polyhedron->hedges.reserve(edge_count * 2); // Each edge has a twin
 
         // Twin edge map
-        std::unordered_map<std::pair<size_t, size_t>, std::shared_ptr<HalfEdge>> edge_map;
+        std::unordered_map<std::pair<size_t, size_t>, HalfEdgeP> edge_map;
 
         // Create vertices
         for (const auto& vertex : vertices) {
@@ -39,7 +39,7 @@ namespace cdlib {
 
         // Create faces and edges
         for (const auto& face_indices : faces) {
-            std::vector<std::shared_ptr<HalfEdge>> face_edges;
+            std::vector<HalfEdgeP> face_edges;
             face_edges.reserve(face_indices.size());
 
             // Create edges
@@ -94,27 +94,27 @@ namespace cdlib {
         return polyhedron;
     }
 
-    std::vector<std::shared_ptr<Feature>> Face::get_neighbours() const {
+    std::vector<FeatureP> Face::get_base_neighbours() const {
         return {edges.begin(), edges.end()};
     }
 
-    std::vector<std::shared_ptr<Feature>> Vertex::get_neighbours() const {
+    std::vector<FeatureP> Vertex::get_base_neighbours() const {
         return {edges.begin(), edges.end()};
     }
 
-    std::vector<std::shared_ptr<Feature>> HalfEdge::get_neighbours() const {
+    std::vector<FeatureP> HalfEdge::get_base_neighbours() const {
         return {start, end, face, twin->face};
     }
 
-    std::vector<std::shared_ptr<Face>> HalfEdge::get_neighbour_faces() const {
+    std::vector<FaceP> HalfEdge::get_neighbour_faces() const {
         return {face, twin->face};
     }
 
-    std::vector<std::shared_ptr<Vertex>> HalfEdge::get_neighbour_vertices() const {
+    std::vector<VertexP> HalfEdge::get_neighbour_vertices() const {
         return {start, end};
     }
 
-    std::shared_ptr<HalfEdge> HalfEdge::create(const glm::vec3& start, const glm::vec3& end) {
+    HalfEdgeP HalfEdge::create(const glm::vec3& start, const glm::vec3& end) {
         const auto edge = std::make_shared<HalfEdge>(std::make_shared<Vertex>(start), std::make_shared<Vertex>(end));
         const auto twin = std::make_shared<HalfEdge>(edge->end, edge->start);
         edge->twin = twin;

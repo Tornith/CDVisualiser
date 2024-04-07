@@ -11,9 +11,9 @@
 namespace cdlib::Voronoi {
     struct VoronoiPlane final : Plane {
         // The face/vertex that the plane is associated with
-        std::shared_ptr<Feature> feature;
+        FeatureP feature;
         // The edge that the plane is associated with
-        std::shared_ptr<HalfEdge> edge;
+        HalfEdgeP edge;
 
         // Negation operator
         [[nodiscard]] VoronoiPlane operator-() const {
@@ -22,10 +22,10 @@ namespace cdlib::Voronoi {
         }
     };
 
-    [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Vertex>& vertex, const std::shared_ptr<HalfEdge>& edge);
-    [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const std::shared_ptr<Face>& face, const std::shared_ptr<HalfEdge>& edge);
+    [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const VertexP& vertex, const HalfEdgeP& edge);
+    [[nodiscard]] inline VoronoiPlane get_voronoi_plane(const FaceP& face, const HalfEdgeP& edge);
 
-    [[nodiscard]] std::optional<VoronoiPlane> get_voronoi_plane_safe(const std::shared_ptr<Feature>& feature, const std::shared_ptr<Feature>& neighbour);
+    [[nodiscard]] std::optional<VoronoiPlane> get_voronoi_plane_safe(const FeatureP& feature, const FeatureP& neighbour);
 
     template <typename T> requires IsFeature<T>
     [[nodiscard]] std::pair<bool, std::optional<VoronoiPlane>> in_voronoi_region(const std::shared_ptr<T>& feature, const glm::vec3& point) {
@@ -44,7 +44,7 @@ namespace cdlib::Voronoi {
     }
 
     template <>
-    [[nodiscard]] inline std::pair<bool, std::optional<VoronoiPlane>> in_voronoi_region<Face>(const std::shared_ptr<Face>& feature, const glm::vec3& point) {
+    [[nodiscard]] inline std::pair<bool, std::optional<VoronoiPlane>> in_voronoi_region<Face>(const FaceP& feature, const glm::vec3& point) {
         // Run the same code as the general case and check if the point is above the face itself
         if (auto base = in_voronoi_region<Feature>(feature, point); !base.first) {
             return base;

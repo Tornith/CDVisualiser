@@ -1,10 +1,12 @@
 #include "vclip.hpp"
 
+#include <functional>
+
 #include "voronoi.hpp"
 
 namespace cdlib
 {
-    ClipData clip_edge(const std::shared_ptr<HalfEdge>& clipped_edge, const std::shared_ptr<Feature>& feature) {
+    ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature) {
         return clip_edge(clipped_edge, feature, feature->get_neighbours());
     }
 
@@ -23,6 +25,35 @@ namespace cdlib
         return false;
     }
 
+    std::optional<float> VClip::distance_derivative_sign(const glm::vec3 edge_point, const HalfEdgeP& edge, const VertexP& vertex)
+    {
+        // sign(D'_{E,X}(lambda) = sign(u * (e(lambda) - v)))
+        //  - u = direction of the edge
+        //  - e(lambda) = point on the edge (in clip_data we have point_l and point_h)
+        //  - v = point on the feature
+        if (edge_point == vertex->position){
+            return std::nullopt;
+        }
+
+        return dot(edge->get_direction(), edge_point - vertex->position);
+    }
+
+    std::optional<float> VClip::distance_derivative_sign(const glm::vec3 edge_point, const HalfEdgeP& edge, const FaceP& face)
+    {
+        // sign(D'_{F,X}(lambda) = { +sign(u * n) if distance of p to plane is >0 else -sign(u * n) }
+        //  - u = direction of the edge
+        //  - n = normal of the face
+        //  - p = point on the edge (in clip_data we have point_l and point_h)
+        const auto dot_result = dot(edge->get_direction(), face->plane.normal);
+        const auto distance = face->plane.distance_to(edge_point);
+
+        if (distance == 0) {
+            return std::nullopt;
+        }
+
+        return distance > 0 ? dot_result : -dot_result;
+    }
+
     /**
      *
      * @param clip_data
@@ -30,92 +61,27 @@ namespace cdlib
      */
     bool VClip::post_clip_derivative_check(const ClipData& clip_data)
     {
-        // Page 10 of the original paper
+        const auto feature = primary_feature();
         const auto half_edge = secondary_feature<HalfEdge>();
 
-        // If the primary feature is a vertex
-        // sign(D'_{E,X}(lambda) = sign(u * (e(lambda) - v)))
-        //  - u = direction of the edge
-        //  - e(lambda) = point on the edge (in clip_data we have point_l and point_h)
-        //  - v = point on the feature
-        const auto vertex_check = [](const glm::vec3 edge_direction, const glm::vec3 edge_point, const glm::vec3 feature_point) {
-            return dot(edge_direction, edge_point - feature_point);
-        };
+        const auto is_feature_edge = static_cast<bool>(std::dynamic_pointer_cast<HalfEdge>(feature));
 
-        // If the primary feature is a face
-        // sign(D'_{F,X}(lambda) = { +sign(u * n) if distance of p to plane is >0 else -sign(u * n) }
-        //  - u = direction of the edge
-        //  - n = normal of the face
-        //  - p = point on the edge (in clip_data we have point_l and point_h)
-        auto face_check = [](const glm::vec3 edge_direction, const Plane plane, const glm::vec3 point) {
-            const auto dot_result = dot(edge_direction, plane.normal);
-            const auto distance = plane.distance_to(point);
-            return distance > 0 ? dot_result : -dot_result;
-        };
+        // If the primary feature is an edge we check the derivative against the appropriate neighbours
+        // Page 10 of the original paper
+        const std::optional<float> derivative_l = distance_derivative_sign(clip_data.point_l, half_edge, is_feature_edge ? clip_data.neighbour_l : feature);
+        const std::optional<float> derivative_h = distance_derivative_sign(clip_data.point_h, half_edge, is_feature_edge ? clip_data.neighbour_h : feature);
 
-        if (const auto vertex = primary_feature<Vertex>()){
-            const auto direction = half_edge->get_direction();
-            const auto feature_point = vertex->position;
-
-            const auto derivative_l = vertex_check(direction, clip_data.point_l, feature_point);
-            const auto derivative_h = vertex_check(direction, clip_data.point_h, feature_point);
-
-            if (derivative_l == 0|| derivative_h == 0){
-                return false; // Degenerate case
-            }
-            return post_clip_derivative_update(clip_data, derivative_l, derivative_h);
+        if (!derivative_l.has_value() || !derivative_h.has_value()){
+            return false; // Degenerate case
         }
 
-        if (const auto face = primary_feature<Face>()){
-            const auto direction = half_edge->get_direction();
-            const auto normal = face->plane.normal;
-
-            // TODO: Degenerate case
-            const auto derivative_l = face_check(direction, face->plane, clip_data.point_l);
-            const auto derivative_h = face_check(direction, face->plane, clip_data.point_h);
-
-            return post_clip_derivative_update(clip_data, derivative_l, derivative_h);
-        }
-
-        if (const auto edge = primary_feature<HalfEdge>()){
-            const auto direction = half_edge->get_direction();
-
-            auto derivative_l = 0.0f;
-            auto derivative_h = 0.0f;
-
-            if (const auto vertex_l = std::dynamic_pointer_cast<Vertex>(clip_data.neighbour_l))
-            {
-                derivative_l = vertex_check(direction, clip_data.point_l, vertex_l->position);
-            }
-
-            if (const auto vertex_h = std::dynamic_pointer_cast<Vertex>(clip_data.neighbour_h))
-            {
-                derivative_h = vertex_check(direction, clip_data.point_h, vertex_h->position);
-            }
-
-            if (const auto face_l = std::dynamic_pointer_cast<Face>(clip_data.neighbour_l))
-            {
-                derivative_l = face_check(direction, face_l->plane, clip_data.point_l);
-            }
-
-            if (const auto face_h = std::dynamic_pointer_cast<Face>(clip_data.neighbour_h))
-            {
-                derivative_h = face_check(direction, face_h->plane, clip_data.point_h);
-            }
-
-            if (derivative_l == 0 || derivative_h == 0){
-                return false; // Degenerate case
-            }
-
-            return post_clip_derivative_update(clip_data, derivative_l, derivative_h);
-        }
-        return false;
+        return post_clip_derivative_update(clip_data, derivative_l.value(), derivative_h.value());
     }
 
     VClipState VClip::handle_local_minimum()
     {
         auto d_max = std::numeric_limits<float>::min();
-        std::shared_ptr<Face> face_max = nullptr;
+        FaceP face_max = nullptr;
 
         const auto face = get_feature<Face>();
         const auto vertex = get_feature<Vertex>();
@@ -137,15 +103,34 @@ namespace cdlib
         return CONTINUE;
     }
 
-    std::shared_ptr<Feature> VClip::closest_face_vertex_to_edge(const std::shared_ptr<HalfEdge>& edge, const std::shared_ptr<Face>& face) {
+    VertexP VClip::closest_face_vertex_to_edge(const HalfEdgeP& edge, const FaceP& face) {
         const auto face_edges = face->get_neighbours<HalfEdge>();
+        const auto face_vertices = std::ranges::transform_view(face_edges, [](const HalfEdgeP& face_edge) {
+            return face_edge->start;
+        });
 
-        std::shared_ptr<Feature> closest_feature = nullptr;
+        // Find the closest vertex to the edge
+        VertexP closest_vertex = nullptr;
         auto min_distance = std::numeric_limits<float>::max();
 
-        for (const auto& face_edge : face_edges){
+        for (const auto& vertex : face_vertices){
+            const auto clip_data = clip_edge(edge, vertex);
+            if (clip_data.is_clipped) {
+                const auto distance_l = distance(clip_data.point_l, vertex->position);
+                const auto distance_h = distance(clip_data.point_h, vertex->position);
 
+                if (distance_l < min_distance){
+                    min_distance = distance_l;
+                    closest_vertex = vertex;
+                }
+                if (distance_h < min_distance){
+                    min_distance = distance_h;
+                    closest_vertex = vertex;
+                }
+            }
         }
+
+        return closest_vertex;
     }
 
     /**************
@@ -215,7 +200,7 @@ namespace cdlib
 
         // Look for an edge (incident to V) which endpoints satisfy: |D_p(V)| > |D_p(V')|
         // where V' is the other vertex of the incident edge and D_p is the distance to the face
-        std::shared_ptr<HalfEdge> good_edge = nullptr;
+        HalfEdgeP good_edge = nullptr;
         for (const auto& edge : vertex->edges){
             // TODO: Check if the other vertex is actually the other vertex
             const auto other_vertex = edge->end;
@@ -245,12 +230,16 @@ namespace cdlib
         const auto edge_1 = primary_feature<HalfEdge>();
         const auto edge_2 = secondary_feature<HalfEdge>();
 
-        const auto clip_against_edge = [this](const std::shared_ptr<HalfEdge>& active_edge, const std::shared_ptr<HalfEdge>& other_edge, const auto set_function) {
+        const auto clip_against_edge = [this](const HalfEdgeP& active_edge, const HalfEdgeP& other_edge, bool set_primary) -> VClipState {
             // Clip the edge_2 against the edge_1's vertex-edge planes
             const auto clip_data_vertex = clip_edge(other_edge, active_edge, active_edge->get_neighbour_vertices());
             // If the edge_2 is completely beneath one of the vertex-edge planes
             if (clip_data_vertex.neighbour_l != nullptr && clip_data_vertex.neighbour_l == clip_data_vertex.neighbour_h){
-                set_function(clip_data_vertex.neighbour_l);
+                if (set_primary){
+                    set_primary_feature(clip_data_vertex.neighbour_l);
+                } else {
+                    set_secondary_feature(clip_data_vertex.neighbour_l);
+                }
                 return CONTINUE;
             }
 
@@ -263,7 +252,11 @@ namespace cdlib
             const auto clip_data_face = clip_edge(other_edge, active_edge, active_edge->get_neighbour_faces(), clip_data_vertex);
             // If the edge_2 is completely beneath one of the face-edge planes
             if (clip_data_face.neighbour_l != nullptr && clip_data_face.neighbour_l == clip_data_face.neighbour_h){
-                set_function(clip_data_face.neighbour_l);
+                if (set_primary){
+                    set_primary_feature(clip_data_vertex.neighbour_l);
+                } else {
+                    set_secondary_feature(clip_data_vertex.neighbour_l);
+                }
                 return CONTINUE;
             }
 
@@ -274,12 +267,12 @@ namespace cdlib
             return DONE;
         };
 
-        const auto result_1 = clip_against_edge(edge_1, edge_2, set_primary_feature);
+        const auto result_1 = clip_against_edge(edge_1, edge_2, true);
         if (result_1 != DONE) {
             return result_1;
         }
 
-        const auto result_2 = clip_against_edge(edge_2, edge_1, set_secondary_feature);
+        const auto result_2 = clip_against_edge(edge_2, edge_1, false);
         return result_2;
     }
 
@@ -292,11 +285,102 @@ namespace cdlib
 
         // If the edge is excluded
         if (!clip_data.is_clipped) {
-
+            const auto closest_vertex = closest_face_vertex_to_edge(edge, face);
+            set_feature<Face>(closest_vertex);
+            return CONTINUE;
         }
+
+        // Find the distances of clipped points to the face
+        const auto distance_l = face->plane.distance_to(clip_data.point_l);
+        const auto distance_h = face->plane.distance_to(clip_data.point_h);
+
+        // If the sign of the distances is different we have a penetration
+        if (distance_l * distance_h <= 0){
+            return PENETRATION;
+        }
+
+        const auto derivative = distance_derivative_sign(clip_data.point_l, edge, face);
+        if (!derivative.has_value()){
+            std::cerr << "Degenerate case" << std::endl;
+            return ERROR;
+        }
+        if (derivative.value() > 0){
+            if (clip_data.neighbour_l != nullptr){
+                set_feature<Face>(clip_data.neighbour_l);
+            } else {
+                set_feature<HalfEdge>(edge->end);
+            }
+        } else {
+            if (clip_data.neighbour_h != nullptr){
+                set_feature<Face>(clip_data.neighbour_h);
+            } else {
+                set_feature<HalfEdge>(edge->start);
+            }
+        }
+
+        return CONTINUE;
+    }
+
+    VClipState VClip::initialize() {
+        // Check if the colliders are valid
+        if (!collider_1->is_valid() && !collider_2->is_valid()){
+            std::cerr << "Invalid colliders" << std::endl;
+            return ERROR;
+        }
+
+        // Choose the two features randomly (first vertex)
+        // TODO: Temporal coherence
+        feature_1 = collider_1->get_shape()->vertices[0];
+        feature_2 = collider_2->get_shape()->vertices[0];
+
+        return CONTINUE;
+    }
+
+    VClipState VClip::step() {
+        const auto primary_is_vertex = static_cast<bool>(primary_feature<Vertex>());
+        const auto primary_is_edge = static_cast<bool>(primary_feature<HalfEdge>());
+        const auto primary_is_face = static_cast<bool>(primary_feature<Face>());
+        const auto secondary_is_vertex = static_cast<bool>(secondary_feature<Vertex>());
+        const auto secondary_is_edge = static_cast<bool>(secondary_feature<HalfEdge>());
+        const auto secondary_is_face = static_cast<bool>(secondary_feature<Face>());
+
+        if (feature_1 == nullptr || feature_2 == nullptr){
+            return initialize();
+        }
+        if (primary_is_vertex && secondary_is_vertex){
+            return execute_vertex_vertex();
+        }
+        if (primary_is_vertex && secondary_is_edge || primary_is_edge && secondary_is_vertex){
+            return execute_vertex_edge();
+        }
+        if (primary_is_vertex && secondary_is_face || primary_is_face && secondary_is_vertex){
+            return execute_vertex_face();
+        }
+        if (primary_is_edge && secondary_is_edge){
+            return execute_edge_edge();
+        }
+        if (primary_is_edge && secondary_is_face || primary_is_face && secondary_is_edge){
+            return execute_edge_face();
+        }
+        std::cerr << "Invalid state" << std::endl;
+        return ERROR;
     }
 
     std::optional<CollisionData> VClip::get_collision_data() {
-        return std::nullopt;
+        while (state == CONTINUE || state == INIT){
+            state = step();
+        }
+
+        if (state == ERROR){
+            return std::nullopt;
+        }
+
+        return CollisionData{};
+    }
+
+    void VClip::reset() {
+        state = INIT;
+        feature_1 = nullptr;
+        feature_2 = nullptr;
     }
 }
