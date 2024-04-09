@@ -22,7 +22,7 @@ namespace cdlib {
         virtual ~NarrowCollisionDetector() = default;
 
         // Detects collision between two objects
-        [[nodiscard]] virtual std::optional<CollisionData> get_collision_data() = 0;
+        [[nodiscard]] virtual CollisionData get_collision_data() = 0;
     };
 
     class BroadCollisionDetector {

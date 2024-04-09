@@ -200,7 +200,7 @@ namespace cdlib{
 
         void reset();
 
-        [[nodiscard]] std::optional<CollisionData> get_collision_data() override;
+        [[nodiscard]] CollisionData get_collision_data() override;
     };
 
     [[nodiscard]] ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature);

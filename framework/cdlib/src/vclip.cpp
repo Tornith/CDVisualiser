@@ -356,16 +356,17 @@ namespace cdlib
         return ERROR;
     }
 
-    std::optional<CollisionData> VClip::get_collision_data() {
+    CollisionData VClip::get_collision_data() {
         while (state == CONTINUE || state == INIT){
             state = step();
         }
 
         if (state == ERROR){
-            return std::nullopt;
+            return { false };
         }
 
-        return CollisionData{};
+        bool is_colliding = state == PENETRATION;
+
     }
 
     void VClip::reset() {

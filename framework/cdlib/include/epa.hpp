@@ -96,7 +96,7 @@ namespace cdlib {
             EPA::simplex = simplex;
         }
 
-        [[nodiscard]] virtual std::optional<CollisionData> get_collision_data();
+        [[nodiscard]] virtual CollisionData get_collision_data();
         [[nodiscard]] virtual FaceNormalsData get_face_normals(const std::vector<size_t>& face_vector) const;
         virtual void add_unique_edge(std::vector<Edge>& edges, size_t a, size_t b) const;
     };

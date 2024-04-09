@@ -70,11 +70,8 @@ namespace cdlib {
 
         bool origin_in_simplex();
 
-        [[nodiscard]] std::optional<CollisionData> get_collision_data() override {
-            if (is_colliding()) {
-                return CollisionData{glm::vec3(0.f), 0.f};
-            }
-            return std::nullopt;
+        [[nodiscard]] CollisionData get_collision_data() override {
+            return CollisionData{is_colliding()};
         }
     public:
         constexpr static int MAX_ITERATIONS = 10000;
@@ -82,7 +79,7 @@ namespace cdlib {
 
     class GJKEPA : public GJK {
     public:
-        [[nodiscard]] std::optional<CollisionData> get_collision_data() override;
+        [[nodiscard]] CollisionData get_collision_data() override;
     };
 
     // Enum, specifying the state of the steppable GJK
@@ -155,18 +152,15 @@ namespace cdlib {
 
         [[nodiscard]] virtual SteppableGJKState get_current_state() const { return current_state; }
 
-        [[nodiscard]] std::optional<CollisionData> get_collision_data() override {
-            if (result) {
-                return CollisionData{glm::vec3(0.f), 0.f};
-            }
-            return std::nullopt;
+        [[nodiscard]] CollisionData get_collision_data() override {
+            return CollisionData{result};
         }
     };
 
     class SteppableGJKEPA : public SteppableGJK {
     protected:
         bool step_by_step_epa_finished = false;
-        std::optional<CollisionData> collision_data;
+        CollisionData collision_data;
 
         void iteration_substep_epa();
 
@@ -181,6 +175,6 @@ namespace cdlib {
         [[nodiscard]] bool get_gjk_finished() const { return step_by_step_gjk_finished; }
         [[nodiscard]] bool get_epa_finished() const { return step_by_step_epa_finished; }
         [[nodiscard]] bool get_finished() const override { return step_by_step_gjk_finished && step_by_step_epa_finished; }
-        [[nodiscard]] std::optional<CollisionData> get_collision_data() override { return collision_data; }
+        [[nodiscard]] CollisionData get_collision_data() override { return collision_data; }
     };
 }

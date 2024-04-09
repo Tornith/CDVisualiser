@@ -1,7 +1,7 @@
 #include "epa.hpp"
 
 namespace cdlib {
-    std::optional<CollisionData> EPA::get_collision_data() {
+    CollisionData EPA::get_collision_data() {
         // Get the current face normals
         auto [face_normals, min_triangle] = get_face_normals(faces);
 
@@ -77,10 +77,7 @@ namespace cdlib {
             }
         }
 
-        CollisionData collision_data;
-        collision_data.normal = min_normal;
-        collision_data.depth = min_distance + EPA_EPSILON;
-        return collision_data;
+        return { true, min_normal, min_distance + EPA_EPSILON };
     }
 
     FaceNormalsData EPA::get_face_normals(const std::vector<size_t>& face_vector) const {

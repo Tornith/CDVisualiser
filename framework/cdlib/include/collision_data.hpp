@@ -2,6 +2,7 @@
 
 namespace cdlib {
     struct CollisionData {
+        bool is_colliding{ false };
         glm::vec3 normal{};  // Normal of the collision
         float depth{};       // Depth of the collision
 

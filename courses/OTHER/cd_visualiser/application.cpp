@@ -596,15 +596,14 @@ void Application::render_ui() {
                 // auto result = gjk.is_colliding();
                 // std::cout << "Collision: " << result << std::endl;
                 gjk.evaluate();
-                auto result = gjk.get_collision_data();
-                std::cout << "Collision: " << result.has_value() << std::endl;
-                if (result.has_value()) {
-                    auto result_data = gjk.get_collision_data().value();
-                    std::cout << " - Normal: " << result_data.normal.x << " " << result_data.normal.y << " " << result_data.normal.z << std::endl;
-                    std::cout << " - Depth: " << result_data.depth << std::endl;
+                auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
+                std::cout << "Collision: " << is_colliding << std::endl;
+                if (is_colliding) {
+                    std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+                    std::cout << " - Depth: " << depth << std::endl;
 
                     // Draw the collision normal from origin
-                    direction_highlights.emplace_back(result_data.normal * result_data.depth, glm::vec3(0.0f));
+                    direction_highlights.emplace_back(normal * depth, glm::vec3(0.0f));
                 }
             }
 
@@ -636,18 +635,16 @@ void Application::render_ui() {
             direction_highlights.clear();
             direction_highlight_objects.clear();
             gjk.evaluate();
-            auto result = gjk.get_collision_data();
+            auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
 
-            if (result.has_value()) {
-                auto result_data = gjk.get_collision_data().value();
-
+            if (is_colliding) {
                 ImGui::Text("The objects are: colliding");
 
-                ImGui::Text("Collision normal: %f %f %f", result_data.normal.x, result_data.normal.y, result_data.normal.z);
-                ImGui::Text("Collision depth: %f", result_data.depth);
+                ImGui::Text("Collision normal: %f %f %f", normal.x, normal.y, normal.z);
+                ImGui::Text("Collision depth: %f", depth);
 
                 // Draw the collision normal from origin
-                direction_highlights.emplace_back(result_data.normal * result_data.depth, glm::vec3(0.0f));
+                direction_highlights.emplace_back(normal * depth, glm::vec3(0.0f));
                 draw_direction_highlights();
             } else {
                 ImGui::Text("The objects are: not colliding");
@@ -660,19 +657,19 @@ void Application::render_ui() {
             if (ImGui::Button("Calculate collision")) {
                 vclip.reset();
                 const auto collision_data = vclip.get_collision_data();
-                std::cout << "Collision: " << collision_data.has_value() << std::endl;
-                if (collision_data.has_value()) {
-                    const auto& result_data = collision_data.value();
-                    std::cout << " - Distance: " << -result_data.depth << std::endl;
+                std::cout << "Collision: " << collision_data.is_colliding << std::endl;
+                if (collision_data.is_colliding) {
+                    const auto& [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
+                    std::cout << " - Distance: " << depth << std::endl;
+                    std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+                    std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
+                    std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
                 }
             }
         }
         else {
-            auto result = vclip.get_collision_data();
-            if (result.has_value()) {
-                const auto& result_data = result.value();
-                ImGui::Text("Distance: %f", -result_data.depth);
-            }
+            auto [is_colliding, normal, depth, feature_1, feature_2] = vclip.get_collision_data();
+            ImGui::Text("Distance: %f", depth);
         }
     }
     else if (selected_method == CollisionDetectionMethod::AABBTREE) {
@@ -766,13 +763,13 @@ void Application::gjk_step_visualize(cdlib::SteppableGJKState state) {
     }
     else if (state == cdlib::SteppableGJKState::EPA) {
         std::cout << "EPA" << std::endl;
-        const auto result = gjk.get_collision_data();
-        if (result.has_value()) {
-            std::cout << " - Collision normal: " << result.value().normal.x << " " << result.value().normal.y << " " << result.value().normal.z << std::endl;
-            std::cout << " - Collision depth: " << result.value().depth << std::endl;
+        const auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
+        if (is_colliding) {
+            std::cout << " - Collision normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+            std::cout << " - Collision depth: " << depth << std::endl;
 
             // Draw the collision normal from origin
-            direction_highlights.emplace_back(result.value().normal, glm::vec3(0.0f));
+            direction_highlights.emplace_back(normal, glm::vec3(0.0f));
         }
         else {
             std::cout << " - No collision data" << std::endl;

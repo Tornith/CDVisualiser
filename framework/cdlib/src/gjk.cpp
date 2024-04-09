@@ -174,9 +174,9 @@ namespace cdlib {
      * GJK with EPA
      */
 
-    std::optional<CollisionData> GJKEPA::get_collision_data() {
+    CollisionData GJKEPA::get_collision_data() {
         if (!is_colliding()) {
-            return std::nullopt;
+            return CollisionData{ false };
         }
 
         // If the objects are colliding, we can use the EPA algorithm to get the collision data
@@ -361,7 +361,7 @@ namespace cdlib {
 
         if (!result) {
             // If the GJK algorithm didn't find a collision, we can't run the EPA algorithm
-            collision_data = std::nullopt;
+            collision_data = {false};
             return;
         }
 
