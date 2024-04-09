@@ -47,6 +47,8 @@ protected:
     std::vector<SceneObject> active_object_vertex_highlights;
     std::vector<SceneObject> object_vertex_highlights;
 
+    std::vector<SceneObject> feature_highlights;
+
     // Vector of pairs of direction and their origin
     std::vector<std::pair<glm::vec3, glm::vec3>> direction_highlights;
     std::vector<SceneObject> direction_highlight_objects;
@@ -68,6 +70,9 @@ protected:
     bool show_gui = true;
     float object_distance = 1.0f;
     float last_object_distance = 1.0f;
+
+    float object_rotation_pos = 0.0f;
+    float last_object_rotation_pos = 0.0f;
 
     bool show_wireframe = true;
     bool auto_calculate_collision = false;
@@ -93,6 +98,12 @@ protected:
     int last_extra_object_seed = 150;
     int last_extra_object_count = 6;
 
+    // Raycasting
+    bool raycasting = false;
+    std::shared_ptr<cdlib::RayCollider> raycast_collider;
+    glm::vec3 ray_origin;
+    glm::vec3 ray_direction;
+
     // GJK Specific
     cdlib::SteppableGJKEPA gjk;
 
@@ -102,6 +113,8 @@ protected:
 
     // V-Clip Specific
     cdlib::VClip vclip;
+    cdlib::FeatureP highlighted_feature_1;
+    cdlib::FeatureP highlighted_feature_2;
 
     // AABBTREE Specific
 
@@ -125,6 +138,8 @@ public:
     void prepare_collision_detectors();
 
     void create_vertex_highlight_objects();
+    void create_feature_highlights(const cdlib::FeatureP& feature);
+    void clear_feature_highlights();
     void draw_direction_highlights();
 
     static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& from, const glm::vec3& to);
@@ -141,6 +156,8 @@ public:
     static std::vector<glm::vec3> get_minkowski_difference_positions(const std::vector<glm::vec3>& positions_1, const std::vector<glm::vec3>& positions_2);
 
     static glm::vec3 pseudorandom_point(int seed);
+
+    void raycast();
 
     void recalculate_positions();
 

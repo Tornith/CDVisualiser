@@ -187,4 +187,58 @@ namespace cdlib {
             return shape->get_vertex(max_index)->get_local_position();
         }
     };
+
+    class RayCollider final : public Collider
+    {
+        constexpr static float RAY_LENGTH = 1000.0f;
+
+        glm::vec3 direction{};
+        glm::vec3 origin{};
+    public:
+        RayCollider() = default;
+
+        RayCollider(const glm::vec3& origin, const glm::vec3& direction) : direction(normalize(direction) * RAY_LENGTH), origin(origin) {
+            shape = create_ray_shape();
+        }
+
+        ~RayCollider() override = default;
+
+        RayCollider(const RayCollider& other) = default;
+        RayCollider(RayCollider&& other) noexcept : Collider(std::move(other)), direction(other.direction), origin(other.origin) {}
+
+        std::shared_ptr<ConvexPolyhedron> create_ray_shape() {
+            const auto polyhedron = std::make_shared<ConvexPolyhedron>();
+            polyhedron->set_transform(glm::mat4(1.0f));
+
+            const auto start_v = std::make_shared<Vertex>(origin);
+            const auto end_v = std::make_shared<Vertex>(origin + direction);
+
+            start_v->polyhedron = polyhedron;
+            end_v->polyhedron = polyhedron;
+
+            polyhedron->add_vertex(start_v);
+            polyhedron->add_vertex(end_v);
+
+            const auto edge = std::make_shared<HalfEdge>(start_v, end_v);
+            const auto twin = std::make_shared<HalfEdge>(edge->end, edge->start);
+
+            edge->twin = twin;
+            twin->twin = edge;
+            edge->polyhedron = polyhedron;
+            twin->polyhedron = polyhedron;
+
+            polyhedron->add_half_edge(edge);
+            polyhedron->add_half_edge(twin);
+
+            return polyhedron;
+        }
+
+        [[nodiscard]] glm::vec3 support(const glm::vec3& direction) const override
+        {
+            if (dot(direction, this->direction) > 0) {
+                return origin + this->direction;
+            }
+            return origin;
+        }
+    };
 }

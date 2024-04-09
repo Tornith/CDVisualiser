@@ -1,5 +1,6 @@
 #include "convex_polyhedron.hpp"
 
+#include <algorithm>
 #include <iostream>
 #include <unordered_map>
 
@@ -133,5 +134,75 @@ namespace cdlib {
         twin->polyhedron = polyhedron;
 
         return edge;
+    }
+
+    float distance_point_line(const glm::vec3& point, const glm::vec3& a, const glm::vec3& b) {
+        const auto ab = b - a;
+        const auto ap = point - a;
+        const auto bp = point - b;
+
+        const auto e = dot(ap, ab);
+        if (e <= 0.0f) {
+            return length(ap);
+        }
+
+        const auto f = dot(ab, ab);
+        if (e >= f) {
+            return length(bp);
+        }
+
+        return length(cross(ab, ap)) / length(ab);
+    }
+
+    float distance_point_plane(const glm::vec3& point, const Plane& plane) {
+        return dot(plane.normal, point) + plane.d;
+    }
+
+    float Vertex::distance_to(const std::shared_ptr<Feature>& other) const
+    {
+        if (const auto vertex = std::dynamic_pointer_cast<Vertex>(other)) {
+            return distance(get_position(), vertex->get_position());
+        }
+        if (const auto edge = std::dynamic_pointer_cast<HalfEdge>(other)) {
+            return distance_point_line(get_position(), edge->start->get_position(), edge->end->get_position());
+        }
+        if (const auto face = std::dynamic_pointer_cast<Face>(other)) {
+            return distance_point_plane(get_position(), face->get_plane());
+        }
+        return std::numeric_limits<float>::lowest();;
+    }
+
+    float HalfEdge::distance_to(const std::shared_ptr<Feature>& other) const
+    {
+        if (const auto vertex = std::dynamic_pointer_cast<Vertex>(other)) {
+            return distance_point_line(vertex->get_position(), start->get_position(), end->get_position());
+        }
+        if (const auto edge = std::dynamic_pointer_cast<HalfEdge>(other)) {
+            return std::numeric_limits<float>::lowest(); // TODO: Implement
+        }
+        if (const auto face = std::dynamic_pointer_cast<Face>(other)) {
+            return std::numeric_limits<float>::lowest(); // TODO: Implement
+        }
+        return std::numeric_limits<float>::lowest();;
+    }
+
+    float Face::distance_to(const std::shared_ptr<Feature>& other) const
+    {
+        if (const auto vertex = std::dynamic_pointer_cast<Vertex>(other)) {
+            return distance_point_plane(vertex->get_position(), get_plane());
+        }
+        if (const auto edge = std::dynamic_pointer_cast<HalfEdge>(other)) {
+            return std::numeric_limits<float>::lowest(); // TODO: Implement
+        }
+        if (const auto face = std::dynamic_pointer_cast<Face>(other)) {
+            return std::numeric_limits<float>::lowest(); // TODO: Implement
+        }
+        return std::numeric_limits<float>::lowest();;
+    }
+
+    std::vector<std::shared_ptr<Vertex>> Face::get_vertices() const
+    {
+        const auto vertices = std::ranges::transform_view(edges, [](const auto& edge) { return edge->start; });
+        return {vertices.begin(), vertices.end()};
     }
 }

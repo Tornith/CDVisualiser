@@ -79,6 +79,14 @@ namespace cdlib {
 
     class GJKEPA : public GJK {
     public:
+        GJKEPA() = default;
+
+        GJKEPA(const std::shared_ptr<Collider>& collider_1, const std::shared_ptr<Collider>& collider_2) : GJK(collider_1, collider_2) {}
+
+        explicit GJKEPA(const GJK& other) : GJK(other) {}
+
+        explicit GJKEPA(GJK&& other) : GJK(other) {}
+
         [[nodiscard]] CollisionData get_collision_data() override;
     };
 

@@ -365,8 +365,10 @@ namespace cdlib
             return { false };
         }
 
-        bool is_colliding = state == PENETRATION;
-
+        const bool is_colliding = state == PENETRATION;
+        const float distance = feature_distance(feature_1, feature_2) * (is_colliding ? -1.0f : 1.0f);
+        const auto normal = glm::vec3(0.f);
+        return { is_colliding, normal, distance, feature_1, feature_2 };
     }
 
     void VClip::reset() {

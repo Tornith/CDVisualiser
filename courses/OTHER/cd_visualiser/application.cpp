@@ -135,7 +135,7 @@ std::shared_ptr<Geometry> Application::create_line_geometry(const glm::vec3&from
 }
 
 std::shared_ptr<Geometry> Application::create_line_geometry(const glm::vec3&origin, const glm::vec3&direction, float length) {
-    return create_line_geometry(origin, origin + glm::normalize(direction) * length);
+    return create_line_geometry(origin, origin + direction * length);
 }
 
 glm::vec3 Application::pseudorandom_point(const int seed) {
@@ -145,8 +145,19 @@ glm::vec3 Application::pseudorandom_point(const int seed) {
 }
 
 void Application::recalculate_positions() {
-    const auto m1 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance));
-    const auto m2 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance));
+    // Get a point on a circle around the origin (based on the object_rotation_pos)
+    const auto angle = glm::radians(object_rotation_pos);
+    const auto opposite_angle = angle + glm::radians(180.0f);
+
+    const auto distance = object_distance * 4.0f;
+
+    const auto x = glm::cos(angle) * distance;
+    const auto z = glm::sin(angle) * distance;
+    const auto x_opposite = glm::cos(opposite_angle) * distance;
+    const auto z_opposite = glm::sin(opposite_angle) * distance;
+
+    const auto m1 = translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z));
+    const auto m2 = translate(glm::mat4(1.0f), glm::vec3(x_opposite, 0.0f, z_opposite));
 
     object_1->set_model_matrix(m1);
     object_2->set_model_matrix(m2);
@@ -163,7 +174,7 @@ void Application::recalculate_minkowski_difference() {
         }
     }
 
-    auto pm = get_minkowski_difference_positions(object_1->collider->get_global_vertices(), object_2->collider->get_global_vertices());
+    auto pm = get_minkowski_difference_positions(object_1->collider->get_global_vertices(), raycasting ? raycast_collider->get_global_vertices() : object_2->collider->get_global_vertices());
     auto [gm, vm, _] = generate_convex_hull_geometry(pm);
 
     auto mm = glm::mat4(1.0f); // The vertices are already in world space
@@ -322,8 +333,9 @@ void Application::update(float delta) {
     phong_lights_ubo.add(PhongLightData::CreateDirectionalLight(light_position, glm::vec3(0.75f), glm::vec3(0.9f), glm::vec3(1.0f)));
     phong_lights_ubo.update_opengl_data();
 
-    if (abs(object_distance - last_object_distance) > std::numeric_limits<float>::epsilon()) {
+    if (abs(object_distance - last_object_distance) > std::numeric_limits<float>::epsilon() || abs(object_rotation_pos - last_object_rotation_pos) > std::numeric_limits<float>::epsilon()) {
         last_object_distance = object_distance;
+        last_object_rotation_pos = object_rotation_pos;
         update_object_positions();
     }
 }
@@ -331,6 +343,9 @@ void Application::update(float delta) {
 void Application::update_object_positions() {
     recalculate_positions();
     recalculate_minkowski_difference();
+
+    highlighted_feature_1 = nullptr;
+    highlighted_feature_2 = nullptr;
 }
 
 glm::vec3 get_position_from_buffer(std::vector<float> buffer, const size_t index) {
@@ -379,6 +394,46 @@ void Application::draw_direction_highlights() {
     for (const auto& [direction, origin] : direction_highlights) {
         auto geometry = create_line_geometry(origin, direction, 1.0f);
         direction_highlight_objects.emplace_back(geometry, ModelUBO(glm::mat4(1.0f)), cyan_material_ubo);
+    }
+}
+
+void Application::clear_feature_highlights() {
+    feature_highlights.clear();
+}
+
+void Application::create_feature_highlights(const cdlib::FeatureP& feature)
+{
+    auto create_new_vertex_highlight_object = [this](const glm::vec3& position, const PhongMaterialUBO& material) {
+        auto model_matrix = translate(glm::mat4(1.0f), position);
+        auto matrix = scale(model_matrix, glm::vec3(0.05f));
+        return std::move(SceneObject{sphere, ModelUBO(matrix), material});
+    };
+
+    if (const auto vertex = std::dynamic_pointer_cast<cdlib::Vertex>(feature))
+    {
+        const auto position = vertex->get_position();
+        feature_highlights.push_back(create_new_vertex_highlight_object(position, yellow_material_ubo));
+    }
+    else if (const auto edge = std::dynamic_pointer_cast<cdlib::HalfEdge>(feature))
+    {
+        const auto start = edge->start->get_position();
+        const auto end = edge->end->get_position();
+        const auto middle = (start + end) / 2.0f;
+        feature_highlights.push_back(create_new_vertex_highlight_object(start, yellow_material_ubo));
+        feature_highlights.push_back(create_new_vertex_highlight_object(end, yellow_material_ubo));
+        feature_highlights.push_back(create_new_vertex_highlight_object(middle, yellow_material_ubo));
+    }
+    else if (const auto face = std::dynamic_pointer_cast<cdlib::Face>(feature))
+    {
+        const auto vertices = face->get_vertices();
+        auto middle = glm::vec3(0.0f);
+        for (const auto& v : vertices)
+        {
+            middle += v->get_position();
+            feature_highlights.push_back(create_new_vertex_highlight_object(v->get_position(), yellow_material_ubo));
+        }
+        middle /= static_cast<float>(vertices.size());
+        feature_highlights.push_back(create_new_vertex_highlight_object(middle, yellow_material_ubo));
     }
 }
 
@@ -490,6 +545,12 @@ void Application::render_scene() {
         }
     }
 
+    if (selected_method == V_CLIP) {
+        for (SceneObject& object : feature_highlights) {
+            render_object(object, default_unlit_program);
+        }
+    }
+
     // Draw direction highlights
     glDisable(GL_CULL_FACE);
     glPointSize(2.5f);
@@ -520,6 +581,54 @@ void Application::render_object(SceneObject& object, ShaderProgram& program) {
     object.get_geometry().bind_vao();
     object.get_geometry().draw();
 }
+// ----------------------------------------------------------------------------
+// Raycasting
+// ----------------------------------------------------------------------------
+
+void Application::raycast()
+{
+    // Get the current camera position and direction
+    const auto camera_position = camera.get_eye_position();
+    const auto view_matrix = camera.get_view_matrix();
+    auto camera_direction = glm::vec3(0.0f);
+    camera_direction.x = view_matrix[0][2];
+    camera_direction.y = view_matrix[1][2];
+    camera_direction.z = view_matrix[2][2];
+
+    // Create a ray from the camera position and direction
+    ray_direction = -camera_direction * 1000.0f;
+    ray_origin = camera_position;
+
+    // Draw a line from the camera position in the direction of the ray
+    direction_highlights.clear();
+    direction_highlights.emplace_back(ray_direction, ray_origin);
+
+    raycasting = true;
+
+    // Create raycasting collider
+    auto ray_collider = std::make_shared<cdlib::RayCollider>(ray_origin, ray_direction);
+
+    raycast_collider = ray_collider;
+
+    // Perform raycasting
+    std::vector<std::shared_ptr<cdlib::Collider>> hits;
+    if (selected_method == GJK_EPA) {
+        for (const auto& convex_object : convex_objects)
+        {
+            auto gjk = cdlib::SteppableGJKEPA(convex_object->collider, ray_collider);
+            gjk.evaluate();
+            const auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
+            if (is_colliding)
+            {
+                std::cout << "Depth: " << depth << std::endl;
+                hits.push_back(convex_object->collider);
+            }
+        }
+        recalculate_minkowski_difference();
+    }
+
+    std::cout << "Raycast hits: " << hits.size() << std::endl;
+}
 
 
 // ----------------------------------------------------------------------------
@@ -531,7 +640,7 @@ void Application::render_ui() {
     const float unit = ImGui::GetFontSize();
 
     ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_NoDecoration);
-    ImGui::SetWindowSize(ImVec2(25 * unit, 25 * unit));
+    ImGui::SetWindowSize(ImVec2(25 * unit, 40 * unit));
     ImGui::SetWindowPos(ImVec2(2 * unit, 2 * unit));
 
     std::string fps_cpu_string = "FPS (CPU): ";
@@ -568,6 +677,7 @@ void Application::render_ui() {
 
     // Slider for moving the objects closer together
     ImGui::SliderFloat("Object distance", &object_distance, 1.0f, 0.0f);
+    ImGui::SliderFloat("Object rotation", &object_rotation_pos, 0.0f, 360.0f);
 
     ImGui::Spacing();
 
@@ -582,6 +692,13 @@ void Application::render_ui() {
     ImGui::Spacing();
 
     ImGui::Checkbox("Wireframe", &show_wireframe);
+
+    ImGui::Spacing();
+
+    if (ImGui::Button("Raycast")) {
+        raycast();
+        draw_direction_highlights();
+    }
 
     ImGui::Spacing();
 
@@ -656,20 +773,31 @@ void Application::render_ui() {
             // Button for manual collision calculation
             if (ImGui::Button("Calculate collision")) {
                 vclip.reset();
-                const auto collision_data = vclip.get_collision_data();
-                std::cout << "Collision: " << collision_data.is_colliding << std::endl;
-                if (collision_data.is_colliding) {
-                    const auto& [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
-                    std::cout << " - Distance: " << depth << std::endl;
-                    std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
-                    std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
-                    std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
-                }
+                const auto [is_colliding, normal, depth, feature_1, feature_2] = vclip.get_collision_data();
+                std::cout << "Collision: " << is_colliding << std::endl;
+                std::cout << " - Distance: " << depth << std::endl;
+                std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+                std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
+                std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
+
+                clear_feature_highlights();
+                highlighted_feature_1 = feature_1;
+                highlighted_feature_2 = feature_2;
+                create_feature_highlights(feature_1);
+                create_feature_highlights(feature_2);
             }
         }
         else {
+            vclip.reset();
             auto [is_colliding, normal, depth, feature_1, feature_2] = vclip.get_collision_data();
+            ImGui::Text("The objects are: %s", is_colliding ? "colliding" : "not colliding");
             ImGui::Text("Distance: %f", depth);
+
+            clear_feature_highlights();
+            highlighted_feature_1 = feature_1;
+            highlighted_feature_2 = feature_2;
+            create_feature_highlights(feature_1);
+            create_feature_highlights(feature_2);
         }
     }
     else if (selected_method == CollisionDetectionMethod::AABBTREE) {
