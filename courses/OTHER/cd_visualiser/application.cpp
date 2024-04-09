@@ -21,6 +21,8 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     prepare_lights();
     prepare_scene();
     prepare_collision_detectors();
+
+    update_object_positions();
 }
 
 Application::~Application() = default;
@@ -874,15 +876,15 @@ bool Application::test_voronoi_planes() {
     bool result = true;
     auto inner_test = [](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx) -> std::pair<bool, std::optional<cdlib::Voronoi::VoronoiPlane>> {
         if (type == 0) {
-            const auto face = object->faces[idx];
+            const auto face = object->get_face(idx);
             return cdlib::Voronoi::in_voronoi_region(face, point);
         }
         else if (type == 1) {
-            const auto hedge = object->hedges[idx];
+            const auto hedge = object->get_half_edge(idx);
             return cdlib::Voronoi::in_voronoi_region(hedge, point);
         }
         else if (type == 2) {
-            const auto vertex = object->vertices[idx];
+            const auto vertex = object->get_vertex(idx);
             return cdlib::Voronoi::in_voronoi_region(vertex, point);
         }
         return std::make_pair(false, std::nullopt);
@@ -895,7 +897,7 @@ bool Application::test_voronoi_planes() {
     auto unique_in_region_test = [&result, inner_test](const std::shared_ptr<cdlib::ConvexPolyhedron>& object, const glm::vec3& point, const size_t type, const size_t idx) {
         // Check if the point lies in the tested region and not any other
         for (size_t i_type = 0; i_type < 3; i_type++) {
-            const auto max_idx = i_type == 0 ? object->faces.size() : (i_type == 1 ? object->hedges.size() : object->vertices.size());
+            const auto max_idx = i_type == 0 ? object->get_faces().size() : (i_type == 1 ? object->get_half_edges().size() : object->get_vertices().size());
             for (size_t i_idx = 0; i_idx < max_idx; i_idx++) {
                 if (i_type == type && i_idx == idx) {
                     result = result && inner_test(object, point, i_type, i_idx).first;
@@ -903,8 +905,8 @@ bool Application::test_voronoi_planes() {
                 else {
                     // Check if the selected feature is not a twin edge of the checked edge
                     if (type == 1){
-                        const auto hedge = object->hedges[idx];
-                        const auto twin = object->hedges[i_idx]->twin;
+                        const auto hedge = object->get_half_edge(idx);
+                        const auto twin = object->get_half_edge(i_idx)->twin;
                         if (i_type == 1 && twin == hedge)
                             continue;
                     }
@@ -988,7 +990,7 @@ bool Application::test_clip_edge() {
     auto inner_test = [&result](const glm::vec3 start, const glm::vec3 end, const std::shared_ptr<cdlib::Feature>& feature, const bool expected_is_clipped, const float expected_lambda_l, const float expected_lambda_h, const std::shared_ptr<cdlib::Feature> expected_neighbour_l, const std::shared_ptr<cdlib::Feature> expected_neighbour_h) {
         const auto edge = cdlib::HalfEdge::create(start, end);
         auto clip_data = clip_edge(edge, feature);
-        const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h, p1, p2] = clip_data;
+        const auto& [is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h, ce, cf, p1, p2] = clip_data;
         result = result && (is_clipped == expected_is_clipped);
         result = result && std::abs(lambda_l - expected_lambda_l) < 1e-6;
         result = result && std::abs(lambda_h - expected_lambda_h) < 1e-6;
@@ -998,12 +1000,12 @@ bool Application::test_clip_edge() {
 
     const auto polyhedron = create_test_polyhedron_voronoi();
 
-    inner_test(glm::vec3(-1.5, 3, -1), glm::vec3(0.5, 1.5, 3.5), polyhedron->hedges[3], true, 0.444444f, 0.835436f, polyhedron->faces[0], polyhedron->faces[1]);
-    inner_test(glm::vec3(-0.33,2,0.25), glm::vec3(0.5,4.5,3.5), polyhedron->hedges[3], true, 0.230769f, 1.0f, polyhedron->faces[0], nullptr);
-    inner_test(glm::vec3(-2.53,1,3.25), glm::vec3(0.5,4.5,3.5), polyhedron->faces[1], true, 0.174917491749f, 0.281408880626f, polyhedron->hedges[6], polyhedron->hedges[5]);
-    inner_test(glm::vec3(0.5,4.5,3.5), glm::vec3(-3.53,1,3.25), polyhedron->faces[1], false, 0.718591119374f, 0.620347394541f, polyhedron->hedges[5], polyhedron->hedges[6]);
-    inner_test(glm::vec3(0.5,4.5,3.5), glm::vec3(-1.53,2.5,3.25), polyhedron->faces[1], false, 0.0f, 1.0f, polyhedron->hedges[5], polyhedron->hedges[5]);
-    inner_test(glm::vec3(-2.75,4.5,-0.5), glm::vec3(-2.53,-2.5,3.25), polyhedron->vertices[1], true, 0.4f, 0.481473f, polyhedron->hedges[15], polyhedron->hedges[6]);
-    inner_test(glm::vec3(-2.75,4.5,3.5), glm::vec3(-2.53,2.5,3.25), polyhedron->vertices[1], true, 0.0f, 1.0f, nullptr, nullptr);
+    inner_test(glm::vec3(-1.5, 3, -1), glm::vec3(0.5, 1.5, 3.5), polyhedron->get_half_edge(3), true, 0.444444f, 0.835436f, polyhedron->get_face(0), polyhedron->get_face(1));
+    inner_test(glm::vec3(-0.33,2,0.25), glm::vec3(0.5,4.5,3.5), polyhedron->get_half_edge(3), true, 0.230769f, 1.0f, polyhedron->get_face(0), nullptr);
+    inner_test(glm::vec3(-2.53,1,3.25), glm::vec3(0.5,4.5,3.5), polyhedron->get_face(1), true, 0.174917491749f, 0.281408880626f, polyhedron->get_half_edge(6), polyhedron->get_half_edge(5));
+    inner_test(glm::vec3(0.5,4.5,3.5), glm::vec3(-3.53,1,3.25), polyhedron->get_face(1), false, 0.718591119374f, 0.620347394541f, polyhedron->get_half_edge(5), polyhedron->get_half_edge(6));
+    inner_test(glm::vec3(0.5,4.5,3.5), glm::vec3(-1.53,2.5,3.25), polyhedron->get_face(1), false, 0.0f, 1.0f, polyhedron->get_half_edge(5), polyhedron->get_half_edge(5));
+    inner_test(glm::vec3(-2.75,4.5,-0.5), glm::vec3(-2.53,-2.5,3.25), polyhedron->get_vertex(1), true, 0.4f, 0.481473f, polyhedron->get_half_edge(15), polyhedron->get_half_edge(6));
+    inner_test(glm::vec3(-2.75,4.5,3.5), glm::vec3(-2.53,2.5,3.25), polyhedron->get_vertex(1), true, 0.0f, 1.0f, nullptr, nullptr);
     return result;
 }

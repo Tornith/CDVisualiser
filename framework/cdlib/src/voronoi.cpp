@@ -6,19 +6,19 @@
 namespace cdlib::Voronoi {
     VoronoiPlane get_voronoi_plane(const VertexP& vertex, const HalfEdgeP& edge) {
         const auto other = edge->start == vertex ? *edge->end : *edge->start;
-        const glm::vec3 edge_direction = normalize(vertex->position - other.position);
+        const glm::vec3 edge_direction = normalize(vertex->get_position() - other.get_position());
         const glm::vec3 face_normal = normalize(edge_direction);
 
-        return {Plane(face_normal, vertex->position), vertex, edge};
+        return {Plane(face_normal, vertex->get_position()), vertex, edge};
     }
 
     VoronoiPlane get_voronoi_plane(const FaceP& face, const HalfEdgeP& edge) {
-        const glm::vec3 edge_direction = normalize(edge->end->position - edge->start->position);
-        const glm::vec3 face_normal = normalize(face->plane.normal);
+        const glm::vec3 edge_direction = normalize(edge->end->get_position() - edge->start->get_position());
+        const glm::vec3 face_normal = normalize(face->get_plane().normal);
 
         // The voronoi plane is perpendicular to the face normal and the edge direction
         const glm::vec3 plane_normal = normalize(cross(face_normal, edge_direction));
-        return {Plane(plane_normal, edge->start->position), face, edge};
+        return {Plane(plane_normal, edge->start->get_position()), face, edge};
     }
 
     std::optional<VoronoiPlane> get_voronoi_plane_safe(const FeatureP& feature, const FeatureP& neighbour) {

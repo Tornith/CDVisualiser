@@ -33,7 +33,7 @@ struct ConvexObject {
         scene_object.get_model_ubo().update_opengl_data();
 
         if (collider) {
-            collider->set_transform_matrix(model_matrix);
+            collider->set_transform(model_matrix);
         }
     }
 };

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <numeric>
 #include <ranges>
 #include <vector>
 #include <glm/glm.hpp>
@@ -10,7 +9,6 @@ namespace cdlib {
     class Collider {
     protected:
         std::shared_ptr<ConvexPolyhedron> shape;
-        glm::mat4 transform{};
         std::pair<glm::vec3, glm::vec3> aabb;
 
         std::vector<glm::vec3> cached_global_vertices;
@@ -21,10 +19,9 @@ namespace cdlib {
 
         explicit Collider(const std::shared_ptr<ConvexPolyhedron>& shape) : shape(shape) {
             aabb = calculate_aabb(get_global_vertices());
-            transform = glm::mat4(1.0);
         }
 
-        Collider(const std::shared_ptr<ConvexPolyhedron>& shape, const glm::mat4& transform) : shape(shape), transform(transform) {
+        Collider(const std::shared_ptr<ConvexPolyhedron>& shape, const glm::mat4& transform) : shape(shape) {
             aabb = calculate_aabb(get_global_vertices());
         }
 
@@ -49,17 +46,8 @@ namespace cdlib {
             return *this;
         }
 
-        [[nodiscard]] std::vector<VertexP> get_local_vertices() const {
-            return shape->vertices;
-        }
-
-        [[nodiscard]] const glm::mat4& get_transform_matrix() const {
-            return transform;
-        }
-
-        void set_transform_matrix(const glm::mat4& transform) {
-            is_cache_valid = false;
-            Collider::transform = transform;
+        [[nodiscard]] std::vector<VertexP> get_vertices() const {
+            return shape->get_vertices();
         }
 
         [[nodiscard]] std::vector<glm::vec3> get_global_vertices() {
@@ -67,21 +55,14 @@ namespace cdlib {
                 return cached_global_vertices;
             }
 
-            const auto view = std::ranges::views::transform(shape->vertices, [this](const auto& vertex) {
-                return glm::vec3(transform * glm::vec4(vertex->position, 1.0));
+            const auto view = std::ranges::views::transform(shape->get_vertices(), [this](const VertexP& vertex) {
+                return vertex->get_position();
             });
 
             is_cache_valid = true;
             cached_global_vertices = std::vector(view.begin(), view.end());
 
             return cached_global_vertices;
-        }
-
-        [[nodiscard]] glm::vec3 get_global_vertex(const size_t index) const {
-            if (is_cache_valid) {
-                return cached_global_vertices[index];
-            }
-            return transform * glm::vec4(shape->vertices[index]->position, 1.f);
         }
 
         virtual void set_shape(const std::shared_ptr<ConvexPolyhedron>& shape) {
@@ -93,10 +74,23 @@ namespace cdlib {
             return shape;
         }
 
+        [[nodiscard]] glm::vec3 get_global_vertex(const size_t index) const {
+            return shape->get_vertex(index)->get_position();
+        }
+
+        [[nodiscard]] glm::mat4 get_transform() const {
+            return shape->get_transform();
+        }
+
+        void set_transform(const glm::mat4& transform) {
+            shape->set_transform(transform);
+            is_cache_valid = false;
+        }
+
         [[nodiscard]] virtual glm::vec3 support(const glm::vec3& direction) const = 0;
 
         [[nodiscard]] glm::vec3 global_support(const glm::vec3& direction) const {
-            return transform * glm::vec4(support(direction), 1.0);
+            return get_transform() * glm::vec4(support(direction), 1.0);
         }
 
         void set_aabb(const std::pair<glm::vec3, glm::vec3>& aabb) {
@@ -108,7 +102,7 @@ namespace cdlib {
         }
 
         void update_aabb() {
-            aabb = calculate_aabb(shape->vertices);
+            aabb = calculate_aabb(shape->get_vertices());
         }
 
         static std::pair<glm::vec3, glm::vec3> calculate_aabb(const std::vector<glm::vec3>& vertices) {
@@ -124,12 +118,12 @@ namespace cdlib {
         }
 
         static std::pair<glm::vec3, glm::vec3> calculate_aabb(const std::vector<VertexP>& vertices) {
-            glm::vec3 min = vertices[0]->position;
-            glm::vec3 max = vertices[0]->position;
+            glm::vec3 min = vertices[0]->get_position();
+            glm::vec3 max = vertices[0]->get_position();
 
             for (const auto& vertex : vertices) {
-                min = glm::min(min, vertex->position);
-                max = glm::max(max, vertex->position);
+                min = glm::min(min, vertex->get_position());
+                max = glm::max(max, vertex->get_position());
             }
 
             return { min, max };
@@ -139,7 +133,7 @@ namespace cdlib {
             if (shape == nullptr) {
                 return false;
             }
-            const auto is_empty = shape->vertices.empty();
+            const auto is_empty = shape->get_vertices().empty();
             return !is_empty;
         }
     };
@@ -179,18 +173,18 @@ namespace cdlib {
 
         [[nodiscard]] glm::vec3 support(const glm::vec3& direction) const override {
             // Find the vertex that is the furthest in the given direction
-            float max_dot = glm::dot(shape->vertices[0]->position, direction);
+            float max_dot = dot(shape->get_vertex(0)->get_local_position(), direction);
             size_t max_index = 0;
 
             // Start loop at 1 as we've already calculated for vertex 0
-            for (size_t i = 1; i < shape->vertices.size(); i++) {
-                const float dot = glm::dot(shape->vertices[i]->position, direction);
+            for (size_t i = 1; i < shape->get_vertices().size(); i++) {
+                const float dot = glm::dot(shape->get_vertex(i)->get_local_position(), direction);
                 if (dot > max_dot) {
                     max_dot = dot;
                     max_index = i;
                 }
             }
-            return shape->vertices[max_index]->position;
+            return shape->get_vertex(max_index)->get_local_position();
         }
     };
 }

@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "collider.hpp"
 #include "collision_data.hpp"
@@ -25,16 +26,21 @@ namespace cdlib{
         FeatureP neighbour_l;
         FeatureP neighbour_h;
 
+        HalfEdgeP clipped_edge;
+        FeatureP clipping_feature;
+
         glm::vec3 point_l{};
         glm::vec3 point_h{};
 
-        ClipData(glm::vec3 start, glm::vec3 end, bool is_clipped, float lambda_l, float lambda_h, const FeatureP& neighbour_l,
-            const FeatureP& neighbour_h)
+        ClipData(glm::vec3 start, glm::vec3 end, bool is_clipped, float lambda_l, float lambda_h,
+            FeatureP neighbour_l, FeatureP neighbour_h, HalfEdgeP clipped_edge, FeatureP clipping_feature)
             : is_clipped(is_clipped),
               lambda_l(lambda_l),
               lambda_h(lambda_h),
-              neighbour_l(neighbour_l),
-              neighbour_h(neighbour_h)
+              neighbour_l(std::move(neighbour_l)),
+              neighbour_h(std::move(neighbour_h)),
+              clipped_edge(std::move(clipped_edge)),
+              clipping_feature(std::move(clipping_feature))
         {
             const auto direction = end - start;
             point_l = start + lambda_l * direction;
@@ -96,6 +102,16 @@ namespace cdlib{
         [[nodiscard]] std::shared_ptr<T> secondary_feature() const {
             const auto secondary = primary_feature_index == 0 ? feature_2 : feature_1;
             return std::dynamic_pointer_cast<T>(secondary);
+        }
+
+        template<typename T = Feature> requires IsFeature<T>
+        [[nodiscard]] std::shared_ptr<T> get_other_feature(const FeatureP& feature) const {
+            if (feature == feature_1) {
+                return std::dynamic_pointer_cast<T>(feature_2);
+            } if (feature == feature_2) {
+                return std::dynamic_pointer_cast<T>(feature_1);
+            }
+            return nullptr;
         }
 
         template<typename T> requires IsFeature<T>
@@ -161,7 +177,7 @@ namespace cdlib{
         }
 
         static std::optional<float> distance_derivative_sign(const float lambda, const HalfEdgeP& edge, const FeatureP& feature) {
-            const auto edge_point = edge->start->position + lambda * edge->get_direction();
+            const auto edge_point = edge->start->get_position() + lambda * edge->get_direction();
             return distance_derivative_sign(edge_point, edge, feature);
         }
 
@@ -200,8 +216,8 @@ namespace cdlib{
         FeatureP neighbour_h = previous_clip_data.has_value() ? previous_clip_data->neighbour_h : nullptr;
 
         // The original paper calculates the points in reverse order
-        const auto head = clipped_edge->end->position;
-        const auto tail = clipped_edge->start->position;
+        const auto head = clipped_edge->end->get_position();
+        const auto tail = clipped_edge->start->get_position();
 
         // For all voronoi planes of the feature
         for (const auto& neighbour : neighbours){
@@ -251,6 +267,6 @@ namespace cdlib{
             }
         }
 
-        return {head, tail, is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h};
+        return {head, tail, is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h, clipped_edge, feature};
     }
 }

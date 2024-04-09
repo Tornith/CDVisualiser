@@ -194,7 +194,7 @@ Geometry Geometry::from_file(std::filesystem::path path, bool center_vertices) {
         std::vector<float> tex_coords;
 
         glm::vec3 min{std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
-        glm::vec3 max{std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()};
+        glm::vec3 max{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
 
         // Loop over faces(polygon)
         size_t index_offset = 0;

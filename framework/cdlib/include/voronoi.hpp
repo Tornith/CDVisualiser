@@ -49,8 +49,8 @@ namespace cdlib::Voronoi {
         if (auto base = in_voronoi_region<Feature>(feature, point); !base.first) {
             return base;
         }
-        if (!feature->plane.is_above(point)) {
-            return {false, VoronoiPlane{feature->plane, feature, nullptr}};
+        if (!feature->get_plane().is_above(point)) {
+            return {false, VoronoiPlane{feature->get_plane(), feature, nullptr}};
         }
         return {true, std::nullopt};
     }

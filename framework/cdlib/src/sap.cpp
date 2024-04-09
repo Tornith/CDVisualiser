@@ -20,7 +20,7 @@ namespace cdlib {
         for (auto& axis : endpoints) {
             for (size_t i = 1; i < axis.size(); i++) {
                 auto key = axis[i];
-                int j = i - 1;
+                int j = static_cast<int>(i) - 1;
 
                 while (j >= 0 && axis[j].value > key.value) {
                     axis[j + 1] = axis[j];

@@ -115,10 +115,23 @@ namespace cdlib {
     }
 
     HalfEdgeP HalfEdge::create(const glm::vec3& start, const glm::vec3& end) {
-        const auto edge = std::make_shared<HalfEdge>(std::make_shared<Vertex>(start), std::make_shared<Vertex>(end));
+        const auto polyhedron = std::make_shared<ConvexPolyhedron>();
+        polyhedron->set_transform(glm::mat4(1.0f));
+
+        const auto start_v = std::make_shared<Vertex>(start);
+        const auto end_v = std::make_shared<Vertex>(end);
+
+        start_v->polyhedron = polyhedron;
+        end_v->polyhedron = polyhedron;
+
+        const auto edge = std::make_shared<HalfEdge>(start_v, end_v);
         const auto twin = std::make_shared<HalfEdge>(edge->end, edge->start);
+
         edge->twin = twin;
         twin->twin = edge;
+        edge->polyhedron = polyhedron;
+        twin->polyhedron = polyhedron;
+
         return edge;
     }
 }
