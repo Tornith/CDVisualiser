@@ -23,6 +23,7 @@ namespace cdlib {
 
         Collider(const std::shared_ptr<ConvexPolyhedron>& shape, const glm::mat4& transform) : shape(shape) {
             aabb = calculate_aabb(get_global_vertices());
+            shape->set_transform(transform);
         }
 
         virtual ~Collider() = default;
@@ -190,7 +191,7 @@ namespace cdlib {
 
     class RayCollider final : public Collider
     {
-        constexpr static float RAY_LENGTH = 1000.0f;
+        constexpr static float RAY_LENGTH = 100.0f;
 
         glm::vec3 direction{};
         glm::vec3 origin{};
