@@ -191,7 +191,7 @@ namespace cdlib{
             return distance_derivative_sign(edge_point, edge, feature);
         }
 
-        static std::optional<FeatureP> post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h);
+        static std::optional<FeatureP> post_clip_derivative_update(const ClipData& clip_data, std::optional<float> derivative_l, std::optional<float> derivative_h);
         static std::optional<FeatureP> post_clip_derivative_check(const ClipData& clip_data);
 
         [[nodiscard]] VClipState handle_local_minimum();

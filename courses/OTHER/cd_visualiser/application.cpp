@@ -958,6 +958,8 @@ void Application::on_key_pressed(int key, int scancode, int action, int mods) {
 }
 
 void Application::on_resize(int width, int height) {
+    if (width == 0 || height == 0) return;
+
     PV227Application::on_resize(width, height);
     // Update aspect ratio
     auto aspect = static_cast<float>(width) / static_cast<float>(height);

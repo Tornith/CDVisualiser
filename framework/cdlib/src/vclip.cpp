@@ -10,12 +10,12 @@ namespace cdlib
         return clip_edge(clipped_edge, feature, feature->get_neighbours());
     }
 
-    std::optional<FeatureP> VClip::post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h)
+    std::optional<FeatureP> VClip::post_clip_derivative_update(const ClipData& clip_data, const std::optional<float> derivative_l, const std::optional<float> derivative_h)
     {
-        if (clip_data.neighbour_l != nullptr && derivative_l > 0){
+        if (clip_data.neighbour_l != nullptr && derivative_l.has_value() && derivative_l > 0){
             return clip_data.neighbour_l;
         }
-        if (clip_data.neighbour_h != nullptr && derivative_h < 0){
+        if (clip_data.neighbour_h != nullptr && derivative_h.has_value() && derivative_h < 0){
             return clip_data.neighbour_h;
         }
         return std::nullopt;
@@ -62,11 +62,11 @@ namespace cdlib
         const std::optional<float> derivative_l = distance_derivative_sign(clip_data.point_l, clip_data.clipped_edge, is_feature_edge ? clip_data.neighbour_l : clip_data.clipping_feature);
         const std::optional<float> derivative_h = distance_derivative_sign(clip_data.point_h, clip_data.clipped_edge, is_feature_edge ? clip_data.neighbour_h : clip_data.clipping_feature);
 
-        if (!derivative_l.has_value() || !derivative_h.has_value()){
+        if (!derivative_l.has_value() && !derivative_h.has_value()){
             return std::nullopt; // Degenerate case
         }
 
-        return post_clip_derivative_update(clip_data, derivative_l.value(), derivative_h.value());
+        return post_clip_derivative_update(clip_data, derivative_l, derivative_h);
     }
 
     VClipState VClip::handle_local_minimum()
@@ -181,7 +181,7 @@ namespace cdlib
             const auto distance_vertex = face->get_plane().distance_to(vertex->get_position());
             const auto distance_other = face->get_plane().distance_to(other_vertex->get_position());
 
-            if (std::abs(distance_vertex) > std::abs(distance_other)){
+            if (distance_vertex > distance_other){
                 good_edge = edge;
                 break;
             }
@@ -371,7 +371,9 @@ namespace cdlib
                 std::cout << "Distance: " << feature_distance(feature_1, feature_2) << std::endl;
                 std::cout << "Collider 1: " << collider_1->get_shape()->get_debug_data() << std::endl;
                 std::cout << "Collider 2: " << collider_2->get_shape()->get_debug_data() << std::endl;
-                first_looping_features = { feature_1, feature_2 };
+                if (first_looping_features.first == nullptr){
+                    first_looping_features = { feature_1, feature_2 };
+                }
             }
         }
 
