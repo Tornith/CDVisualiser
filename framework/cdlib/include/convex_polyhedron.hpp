@@ -1,9 +1,11 @@
 #pragma once
 #include <memory>
 #include <ranges>
+#include <string>
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtx/norm.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 /**
  * @file convex_polyhedron.hpp
@@ -62,6 +64,10 @@ namespace cdlib {
 
         friend Plane operator*(const glm::mat4& matrix, const Plane& plane) {
             return plane * matrix;
+        }
+
+        [[nodiscard]] std::string to_string() const {
+            return "Plane(normal: (" + std::to_string(normal.x) + ", " + std::to_string(normal.y) + ", " + std::to_string(normal.z) + "), d: " + std::to_string(d) + ")";
         }
     };
 
@@ -127,6 +133,8 @@ namespace cdlib {
         [[nodiscard]] glm::mat4 get_transform() const {
             return transform;
         }
+
+        [[nodiscard]] std::string get_debug_data() const;
     };
 
     struct Feature {
@@ -156,6 +164,8 @@ namespace cdlib {
         }
 
         [[nodiscard]] virtual float distance_to(const std::shared_ptr<Feature>& other) const = 0;
+
+        [[nodiscard]] virtual std::string to_string() const = 0;
 
     protected:
         [[nodiscard]] virtual std::vector<std::shared_ptr<Feature>> get_base_neighbours() const = 0;
@@ -191,10 +201,14 @@ namespace cdlib {
 
         [[nodiscard]] std::vector<std::shared_ptr<Vertex>> get_vertices() const;
 
+        [[nodiscard]] std::vector<glm::vec3> get_vertex_positions() const;
+
         friend bool operator==(const Face& lhs, const Face& rhs) = default;
         friend bool operator!=(const Face& lhs, const Face& rhs) = default;
 
         [[nodiscard]] float distance_to(const std::shared_ptr<Feature>& other) const override;
+
+        [[nodiscard]] std::string to_string() const override;
 
     protected:
         [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_base_neighbours() const override;
@@ -230,6 +244,8 @@ namespace cdlib {
 
         [[nodiscard]] float distance_to(const std::shared_ptr<Feature>& other) const override;
 
+        [[nodiscard]] std::string to_string() const override;
+
     protected:
         [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_base_neighbours() const override;
 
@@ -262,6 +278,8 @@ namespace cdlib {
         static std::shared_ptr<HalfEdge> create(const glm::vec3& start, const glm::vec3& end);
 
         [[nodiscard]] float distance_to(const std::shared_ptr<Feature>& other) const override;
+
+        [[nodiscard]] std::string to_string() const override;
 
     protected:
         [[nodiscard]] std::vector<std::shared_ptr<Feature>> get_base_neighbours() const override;

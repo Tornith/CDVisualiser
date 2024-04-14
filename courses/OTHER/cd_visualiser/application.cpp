@@ -704,7 +704,7 @@ void Application::render_ui() {
 
     ImGui::Checkbox("Auto-calculate collision", &auto_calculate_collision);
 
-    if (selected_method == CollisionDetectionMethod::GJK_EPA) {
+    if (selected_method == GJK_EPA) {
         ImGui::Checkbox("Show minkowski difference", &show_minkowski_difference);
 
         if (!auto_calculate_collision) {
@@ -768,23 +768,60 @@ void Application::render_ui() {
             }
         }
     }
-    else if (selected_method == CollisionDetectionMethod::V_CLIP) {
+    else if (selected_method == V_CLIP) {
+        ImGui::Checkbox("Bruteforce test", &brute_force_test);
+
         if (!auto_calculate_collision) {
             // Button for manual collision calculation
             if (ImGui::Button("Calculate collision")) {
                 vclip.reset();
                 const auto [is_colliding, normal, depth, feature_1, feature_2] = vclip.get_collision_data();
+
                 std::cout << "Collision: " << is_colliding << std::endl;
                 std::cout << " - Distance: " << depth << std::endl;
                 std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
                 std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
                 std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
 
+                if (brute_force_test) {
+                    auto bruteforce_result = vclip.debug_brute_force(feature_1, feature_2);
+                    if (!bruteforce_result) {
+                        std::cerr << "Bruteforce test failed for: dist=" << object_distance << " rot=" << object_rotation_pos << std::endl;
+                    }
+                }
+
                 clear_feature_highlights();
                 highlighted_feature_1 = feature_1;
                 highlighted_feature_2 = feature_2;
                 create_feature_highlights(feature_1);
                 create_feature_highlights(feature_2);
+            }
+
+            ImGui::Text("Iterate over features:");
+            ImGui::Indent(10.0f);
+            if (!step_by_step) {
+                if (ImGui::Button("Start step-by-step")) {
+                    step_by_step = true;
+                    vclip.reset();
+                }
+            } else {
+                if (ImGui::Button("Next step")) {
+                    const auto step_result = vclip.step();
+                    if (step_result == cdlib::DONE || step_result == cdlib::PENETRATION) {
+                        step_by_step = false;
+                    }
+                    const auto current_feature_1 = vclip.primary_feature();
+                    const auto current_feature_2 = vclip.secondary_feature();
+                    clear_feature_highlights();
+                    highlighted_feature_1 = current_feature_1;
+                    highlighted_feature_2 = current_feature_2;
+                    create_feature_highlights(current_feature_1);
+                    create_feature_highlights(current_feature_2);
+                }
+                if (ImGui::Button("Cancel step-by-step")) {
+                    step_by_step = false;
+                    clear_feature_highlights();
+                }
             }
         }
         else {
@@ -793,6 +830,13 @@ void Application::render_ui() {
             ImGui::Text("The objects are: %s", is_colliding ? "colliding" : "not colliding");
             ImGui::Text("Distance: %f", depth);
 
+            if (brute_force_test) {
+                auto bruteforce_result = vclip.debug_brute_force(feature_1, feature_2);
+                if (!bruteforce_result) {
+                    std::cerr << "Bruteforce test failed for: dist=" << object_distance << " rot=" << object_rotation_pos << std::endl;
+                }
+            }
+
             clear_feature_highlights();
             highlighted_feature_1 = feature_1;
             highlighted_feature_2 = feature_2;
@@ -800,10 +844,10 @@ void Application::render_ui() {
             create_feature_highlights(feature_2);
         }
     }
-    else if (selected_method == CollisionDetectionMethod::AABBTREE) {
+    else if (selected_method == AABBTREE) {
 
     }
-    else if (selected_method == CollisionDetectionMethod::SAP) {
+    else if (selected_method == SAP) {
         if (ImGui::Button("Calculate collision")) {
             auto collisions = sap.get_collisions();
             std::cout << "Collisions: " << collisions.size() << std::endl;
@@ -926,8 +970,9 @@ void Application::on_resize(int width, int height) {
  **************/
 
 void Application::run_tests() {
-    std::cout << "Voronoi Planes: " << test_voronoi_planes() << std::endl;
-    std::cout << "Clip Edges: " << test_clip_edge() << std::endl;
+    std::cout << "Voronoi planes: " << test_voronoi_planes() << std::endl;
+    std::cout << "Clip edges: " << test_clip_edge() << std::endl;
+    std::cout << "Most violating plane: " << test_most_violating_plane() << std::endl;
 }
 
 std::shared_ptr<cdlib::ConvexPolyhedron> Application::create_test_cube_voronoi(glm::mat4 model_matrix) {
@@ -1132,5 +1177,11 @@ bool Application::test_clip_edge() {
     inner_test(glm::vec3(0.5,4.5,3.5), glm::vec3(-1.53,2.5,3.25), polyhedron->get_face(1), false, 0.0f, 1.0f, polyhedron->get_half_edge(5), polyhedron->get_half_edge(5));
     inner_test(glm::vec3(-2.75,4.5,-0.5), glm::vec3(-2.53,-2.5,3.25), polyhedron->get_vertex(1), true, 0.4f, 0.481473f, polyhedron->get_half_edge(15), polyhedron->get_half_edge(6));
     inner_test(glm::vec3(-2.75,4.5,3.5), glm::vec3(-2.53,2.5,3.25), polyhedron->get_vertex(1), true, 0.0f, 1.0f, nullptr, nullptr);
+    return result;
+}
+
+bool Application::test_most_violating_plane() {
+    bool result = true;
+
     return result;
 }

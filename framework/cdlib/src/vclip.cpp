@@ -10,19 +10,15 @@ namespace cdlib
         return clip_edge(clipped_edge, feature, feature->get_neighbours());
     }
 
-    bool VClip::post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h)
+    std::optional<FeatureP> VClip::post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h)
     {
         if (clip_data.neighbour_l != nullptr && derivative_l > 0){
-            // Update secondary to neighbour_l
-            set_primary_feature(clip_data.neighbour_l);
-            return true;
+            return clip_data.neighbour_l;
         }
         if (clip_data.neighbour_h != nullptr && derivative_h < 0){
-            // Update secondary to neighbour_h
-            set_primary_feature(clip_data.neighbour_h);
-            return true;
+            return clip_data.neighbour_h;
         }
-        return false;
+        return std::nullopt;
     }
 
     std::optional<float> VClip::distance_derivative_sign(const glm::vec3 edge_point, const HalfEdgeP& edge, const VertexP& vertex)
@@ -57,9 +53,9 @@ namespace cdlib
     /**
      * @return true, if the primary feature was updated
      */
-    bool VClip::post_clip_derivative_check(const ClipData& clip_data)
+    std::optional<FeatureP> VClip::post_clip_derivative_check(const ClipData& clip_data)
     {
-        const auto is_feature_edge = static_cast<bool>(clip_data.clipping_feature);
+        const auto is_feature_edge = static_cast<bool>(std::dynamic_pointer_cast<HalfEdge>(clip_data.clipping_feature));
 
         // If the primary feature is an edge we check the derivative against the appropriate neighbours
         // Page 10 of the original paper
@@ -67,7 +63,7 @@ namespace cdlib
         const std::optional<float> derivative_h = distance_derivative_sign(clip_data.point_h, clip_data.clipped_edge, is_feature_edge ? clip_data.neighbour_h : clip_data.clipping_feature);
 
         if (!derivative_l.has_value() || !derivative_h.has_value()){
-            return false; // Degenerate case
+            return std::nullopt; // Degenerate case
         }
 
         return post_clip_derivative_update(clip_data, derivative_l.value(), derivative_h.value());
@@ -98,34 +94,22 @@ namespace cdlib
         return CONTINUE;
     }
 
-    VertexP VClip::closest_face_vertex_to_edge(const HalfEdgeP& edge, const FaceP& face) {
-        const auto face_edges = face->get_neighbours<HalfEdge>();
-        const auto face_vertices = std::ranges::transform_view(face_edges, [](const HalfEdgeP& face_edge) {
-            return face_edge->start;
-        });
-
-        // Find the closest vertex to the edge
-        VertexP closest_vertex = nullptr;
-        auto min_distance = std::numeric_limits<float>::max();
-
-        for (const auto& vertex : face_vertices){
-            const auto clip_data = clip_edge(edge, vertex);
-            if (clip_data.is_clipped) {
-                const auto distance_l = distance(clip_data.point_l, vertex->get_position());
-                const auto distance_h = distance(clip_data.point_h, vertex->get_position());
-
-                if (distance_l < min_distance){
-                    min_distance = distance_l;
-                    closest_vertex = vertex;
-                }
-                if (distance_h < min_distance){
-                    min_distance = distance_h;
-                    closest_vertex = vertex;
-                }
+    FeatureP VClip::closest_face_vertex_to_edge(const HalfEdgeP& clipped_edge, const FaceP& face) {
+        FeatureP closest_feature = nullptr;
+        auto closest_distance = std::numeric_limits<float>::max();
+        for (const auto& vertex : face->get_vertices()){
+            if (const auto distance = feature_distance(vertex, clipped_edge); distance < closest_distance){
+                closest_distance = distance;
+                closest_feature = vertex;
             }
         }
-
-        return closest_vertex;
+        for (const auto& edge : face->get_edges()){
+            if (const auto distance = feature_distance(edge, clipped_edge); distance < closest_distance){
+                closest_distance = distance;
+                closest_feature = edge;
+            }
+        }
+        return closest_feature;
     }
 
     /**************
@@ -170,8 +154,8 @@ namespace cdlib
             return CONTINUE;
         }
 
-        if (post_clip_derivative_check(clip_data))
-        {
+        if (const auto feature_to_update = post_clip_derivative_check(clip_data); feature_to_update.has_value()){
+            set_feature<Vertex>(feature_to_update.value());
             return CONTINUE;
         }
 
@@ -234,7 +218,12 @@ namespace cdlib
             }
 
             // Check derivatives
-            if (post_clip_derivative_check(clip_data_vertex)){
+            if (const auto feature_to_update = post_clip_derivative_check(clip_data_vertex); feature_to_update.has_value()){
+                if (set_primary){
+                    set_primary_feature(feature_to_update.value());
+                } else {
+                    set_secondary_feature(feature_to_update.value());
+                }
                 return CONTINUE;
             }
 
@@ -251,7 +240,12 @@ namespace cdlib
             }
 
             // Check derivatives
-            if (post_clip_derivative_check(clip_data_face)){
+            if (const auto feature_to_update = post_clip_derivative_check(clip_data_face); feature_to_update.has_value()){
+                if (set_primary){
+                    set_primary_feature(feature_to_update.value());
+                } else {
+                    set_secondary_feature(feature_to_update.value());
+                }
                 return CONTINUE;
             }
             return DONE;
@@ -275,8 +269,13 @@ namespace cdlib
 
         // If the edge is excluded
         if (!clip_data.is_clipped) {
-            const auto closest_vertex = closest_face_vertex_to_edge(edge, face);
-            set_feature<Face>(closest_vertex);
+            const auto neighbour = clip_data.neighbour_l != nullptr ? clip_data.neighbour_l : clip_data.neighbour_h;
+            if (neighbour == nullptr){
+                std::cerr << "Huhh?" << std::endl;
+                return ERROR;
+            }
+            const auto closest_feature = closest_face_vertex_to_edge(edge, face);
+            set_feature<Face>(closest_feature);
             return CONTINUE;
         }
 
@@ -298,13 +297,13 @@ namespace cdlib
             if (clip_data.neighbour_l != nullptr){
                 set_feature<Face>(clip_data.neighbour_l);
             } else {
-                set_feature<HalfEdge>(edge->end);
+                set_feature<HalfEdge>(edge->start);
             }
         } else {
             if (clip_data.neighbour_h != nullptr){
                 set_feature<Face>(clip_data.neighbour_h);
             } else {
-                set_feature<HalfEdge>(edge->start);
+                set_feature<HalfEdge>(edge->end);
             }
         }
 
@@ -357,8 +356,23 @@ namespace cdlib
     }
 
     CollisionData VClip::get_collision_data() {
+        auto iteration = 0;
+        std::pair<FeatureP, FeatureP> first_looping_features = { nullptr, nullptr };
         while (state == CONTINUE || state == INIT){
             state = step();
+            if (iteration++ > 10000){
+                if (first_looping_features.first == feature_1 && first_looping_features.second == feature_2){
+                    std::cerr << "Infinite loop finished" << std::endl;
+                    return { false };
+                }
+                std::cerr << "Infinite loop" << std::endl;
+                std::cout << "Feature 1: " << feature_1->to_string() << std::endl;
+                std::cout << "Feature 2: " << feature_2->to_string() << std::endl;
+                std::cout << "Distance: " << feature_distance(feature_1, feature_2) << std::endl;
+                std::cout << "Collider 1: " << collider_1->get_shape()->get_debug_data() << std::endl;
+                std::cout << "Collider 2: " << collider_2->get_shape()->get_debug_data() << std::endl;
+                first_looping_features = { feature_1, feature_2 };
+            }
         }
 
         if (state == ERROR){
@@ -375,5 +389,80 @@ namespace cdlib
         state = INIT;
         feature_1 = nullptr;
         feature_2 = nullptr;
+    }
+
+    bool VClip::debug_brute_force(const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const {
+        // Test every combination of features on both colliders
+        const auto vertices_1 = collider_1->get_shape()->get_vertices() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
+        const auto vertices_2 = collider_2->get_shape()->get_vertices() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
+        const auto edges_1 = collider_1->get_shape()->get_half_edges() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
+        const auto edges_2 = collider_2->get_shape()->get_half_edges() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
+        const auto faces_1 = collider_1->get_shape()->get_faces() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
+        const auto faces_2 = collider_2->get_shape()->get_faces() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
+
+        // Combine all features into one vector
+        std::vector<FeatureP> features_1;
+        features_1.insert(features_1.end(), vertices_1.begin(), vertices_1.end());
+        features_1.insert(features_1.end(), edges_1.begin(), edges_1.end());
+        features_1.insert(features_1.end(), faces_1.begin(), faces_1.end());
+
+        std::vector<FeatureP> features_2;
+        features_2.insert(features_2.end(), vertices_2.begin(), vertices_2.end());
+        features_2.insert(features_2.end(), edges_2.begin(), edges_2.end());
+        features_2.insert(features_2.end(), faces_2.begin(), faces_2.end());
+
+        // Test every combination of features
+        auto min_distance = std::numeric_limits<float>::max();
+        FeatureP min_feature_1 = nullptr;
+        FeatureP min_feature_2 = nullptr;
+        for (const auto& feature_1 : features_1){
+            for (const auto& feature_2 : features_2){
+                if (feature_1 == feature_2){
+                    continue;
+                }
+
+                const auto distance = feature_distance(feature_1, feature_2);
+                if (distance < min_distance){
+                    min_distance = distance;
+                    min_feature_1 = feature_1;
+                    min_feature_2 = feature_2;
+                }
+            }
+        }
+
+        auto check_if_features_equal = [](const FeatureP& f1, const FeatureP& f2) {
+            if (f1 == nullptr || f2 == nullptr){
+                return false;
+            }
+            if (f1 == f2) return true;
+
+            // Check if the features are half_edges, if so check if they are potentially twins
+            if (const auto edge_1 = std::dynamic_pointer_cast<HalfEdge>(f1); edge_1 != nullptr){
+                if (const auto edge_2 = std::dynamic_pointer_cast<HalfEdge>(f2); edge_2 != nullptr){
+                    return edge_1->start == edge_2->end && edge_1->end == edge_2->start;
+                }
+            }
+
+            return false;
+        };
+
+        const auto expected_distance = feature_distance(expected_feature_1, expected_feature_2);
+        const auto distance_difference = std::abs(expected_distance - min_distance);
+
+        const auto result = check_if_features_equal(expected_feature_1, min_feature_1) && check_if_features_equal(expected_feature_2, min_feature_2) ||
+               check_if_features_equal(expected_feature_1, min_feature_2) && check_if_features_equal(expected_feature_2, min_feature_1) ||
+               distance_difference < 0.001f;
+
+        if (!result) {
+            std::cerr << "Brute force failed" << std::endl;
+            std::cerr << "Expected: " << expected_feature_1->to_string() << " - " << expected_feature_2->to_string() << std::endl;
+            std::cerr << "Got: " << min_feature_1->to_string() << " - " << min_feature_2->to_string() << std::endl;
+            std::cerr << "Distance difference: " << distance_difference << std::endl;
+            std::cerr << "Collider 1: " << collider_1->get_shape()->get_debug_data() << std::endl;
+            std::cerr << "Collider 2: " << collider_2->get_shape()->get_debug_data() << std::endl;
+            std::cerr << std::endl;
+        }
+
+        return result;
     }
 }

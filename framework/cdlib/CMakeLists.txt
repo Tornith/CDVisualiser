@@ -20,6 +20,7 @@ target_sources(
         include/collision_detector.hpp
         include/collider.hpp
         include/collision_data.hpp
+        include/utils.hpp
 
         include/convex_polyhedron.hpp
         src/convex_polyhedron.cpp

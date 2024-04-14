@@ -116,6 +116,8 @@ protected:
     cdlib::FeatureP highlighted_feature_1;
     cdlib::FeatureP highlighted_feature_2;
 
+    bool brute_force_test = false;
+
     // AABBTREE Specific
 
     // SAP Specific
@@ -217,4 +219,5 @@ public:
 
     static bool test_voronoi_planes();
     static bool test_clip_edge();
+    static bool test_most_violating_plane();
 };

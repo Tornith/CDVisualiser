@@ -42,9 +42,9 @@ namespace cdlib{
               clipped_edge(std::move(clipped_edge)),
               clipping_feature(std::move(clipping_feature))
         {
-            const auto direction = end - start;
-            point_l = start + lambda_l * direction;
-            point_h = start + lambda_h * direction;
+            const auto direction = start - end;
+            point_l = end + lambda_l * direction;
+            point_h = end + lambda_h * direction;
         }
 
         [[nodiscard]] bool simply_excluded() const {
@@ -149,6 +149,16 @@ namespace cdlib{
             }
         }
 
+        void set_feature(const FeatureP& set_feature, const FeatureP& replaced_feature) {
+            if (feature_1 == replaced_feature) {
+                feature_1 = set_feature;
+            } else if (feature_2 == replaced_feature) {
+                feature_2 = set_feature;
+            } else {
+                std::cerr << "Feature not found" << std::endl;
+            }
+        }
+
         template<typename T> requires IsFeature<T>
         void set_feature_as_primary() {
             if (std::dynamic_pointer_cast<T>(feature_1)) {
@@ -181,12 +191,12 @@ namespace cdlib{
             return distance_derivative_sign(edge_point, edge, feature);
         }
 
-        bool post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h);
-        bool post_clip_derivative_check(const ClipData& clip_data);
+        static std::optional<FeatureP> post_clip_derivative_update(const ClipData& clip_data, float derivative_l, float derivative_h);
+        static std::optional<FeatureP> post_clip_derivative_check(const ClipData& clip_data);
 
         [[nodiscard]] VClipState handle_local_minimum();
 
-        [[nodiscard]] static VertexP closest_face_vertex_to_edge(const HalfEdgeP& edge, const FaceP& face);
+        [[nodiscard]] static FeatureP closest_face_vertex_to_edge(const HalfEdgeP& clipped_edge, const FaceP& face);
 
         // States
         [[nodiscard]] VClipState initialize();
@@ -201,6 +211,8 @@ namespace cdlib{
         void reset();
 
         [[nodiscard]] CollisionData get_collision_data() override;
+
+        [[nodiscard]] bool debug_brute_force(const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const;
     };
 
     [[nodiscard]] ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature);
@@ -269,4 +281,33 @@ namespace cdlib{
 
         return {head, tail, is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h, clipped_edge, feature};
     }
+
+    class SteppableVClip : public VClip {
+    public:
+        SteppableVClip() = default;
+
+        SteppableVClip(const std::shared_ptr<Collider>& collider_1, const std::shared_ptr<Collider>& collider_2)
+            : VClip(collider_1, collider_2) {
+        }
+
+        SteppableVClip(const SteppableVClip& other) = default;
+
+        SteppableVClip(SteppableVClip&& other) noexcept
+            : VClip(std::move(other)) {
+        }
+
+        SteppableVClip& operator=(const SteppableVClip& other) {
+            if (this == &other)
+                return *this;
+            VClip::operator =(other);
+            return *this;
+        }
+
+        SteppableVClip& operator=(SteppableVClip&& other) noexcept {
+            if (this == &other)
+                return *this;
+            VClip::operator =(std::move(other));
+            return *this;
+        }
+    };
 }
