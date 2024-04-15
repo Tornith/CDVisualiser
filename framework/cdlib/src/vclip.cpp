@@ -181,7 +181,8 @@ namespace cdlib
             const auto distance_vertex = face->get_plane().distance_to(vertex->get_position());
             const auto distance_other = face->get_plane().distance_to(other_vertex->get_position());
 
-            if (distance_vertex > distance_other){
+            // If the other vertex is closer to the face (from either direction)
+            if (distance_vertex * distance_other < 0 || std::abs(distance_vertex) > std::abs(distance_other)){
                 good_edge = edge;
                 break;
             }
