@@ -56,13 +56,15 @@ namespace cdlib{
         }
     };
 
-    class VClip : NarrowCollisionDetector {
+    class VClip : public NarrowCollisionDetector {
+    protected:
         VClipState state = INIT;
 
         FeatureP feature_1;
         FeatureP feature_2;
 
         uint_fast8_t primary_feature_index = 0;
+
     public:
         VClip() = default;
 
@@ -72,9 +74,7 @@ namespace cdlib{
 
         VClip(const VClip& other) = default;
 
-        VClip(VClip&& other) noexcept
-            : NarrowCollisionDetector(other.collider_1, other.collider_2) {
-        }
+        VClip(VClip&& other) noexcept : NarrowCollisionDetector(std::move(other.collider_1), std::move(other.collider_2)) {}
 
         VClip& operator=(const VClip& other) {
             if (this == &other)
@@ -87,8 +87,8 @@ namespace cdlib{
         VClip& operator=(VClip&& other) noexcept {
             if (this == &other)
                 return *this;
-            collider_1 = other.collider_1;
-            collider_2 = other.collider_2;
+            collider_1 = std::move(other.collider_1);
+            collider_2 = std::move(other.collider_2);
             return *this;
         }
 
@@ -199,14 +199,14 @@ namespace cdlib{
         [[nodiscard]] static FeatureP closest_face_vertex_to_edge(const HalfEdgeP& clipped_edge, const FaceP& face);
 
         // States
-        [[nodiscard]] VClipState initialize();
-        [[nodiscard]] VClipState execute_vertex_vertex();
-        [[nodiscard]] VClipState execute_vertex_edge();
-        [[nodiscard]] VClipState execute_vertex_face();
-        [[nodiscard]] VClipState execute_edge_edge();
-        [[nodiscard]] VClipState execute_edge_face();
+        [[nodiscard]] virtual VClipState initialize();
+        [[nodiscard]] virtual VClipState execute_vertex_vertex();
+        [[nodiscard]] virtual VClipState execute_vertex_edge();
+        [[nodiscard]] virtual VClipState execute_vertex_face();
+        [[nodiscard]] virtual VClipState execute_edge_edge();
+        [[nodiscard]] virtual VClipState execute_edge_face();
 
-        [[nodiscard]] VClipState step();
+        [[nodiscard]] virtual VClipState step();
 
         void reset();
 
@@ -282,32 +282,39 @@ namespace cdlib{
         return {head, tail, is_clipped, lambda_l, lambda_h, neighbour_l, neighbour_h, clipped_edge, feature};
     }
 
-    class SteppableVClip : public VClip {
+    class VClipRaycast final : VClip {
+        glm::vec3 ray_origin{};
+        glm::vec3 ray_direction{};
+
     public:
-        SteppableVClip() = default;
+        VClipRaycast() = default;
 
-        SteppableVClip(const std::shared_ptr<Collider>& collider_1, const std::shared_ptr<Collider>& collider_2)
-            : VClip(collider_1, collider_2) {
+        VClipRaycast(const glm::vec3& ray_origin, const glm::vec3& ray_direction)
+            : ray_origin(ray_origin),
+              ray_direction(ray_direction)
+        {}
+
+        VClipRaycast(const std::shared_ptr<Collider>& collider, const glm::vec3& ray_origin, const glm::vec3& ray_direction)
+            : ray_origin(ray_origin), ray_direction(ray_direction)
+        {
+            collider_1 = collider;
+            collider_2 = std::make_shared<RayCollider>(ray_origin, ray_direction);
         }
 
-        SteppableVClip(const SteppableVClip& other) = default;
+        VClipRaycast(const VClipRaycast& other) = default;
+        VClipRaycast(VClipRaycast&& other) noexcept = default;
+        VClipRaycast& operator=(const VClipRaycast& other) = default;
+        VClipRaycast& operator=(VClipRaycast&& other) noexcept = default;
 
-        SteppableVClip(SteppableVClip&& other) noexcept
-            : VClip(std::move(other)) {
+        [[nodiscard]] CollisionData get_collision_data() override;
+
+        [[nodiscard]] VClipState step() override {
+            return VClip::step();
         }
 
-        SteppableVClip& operator=(const SteppableVClip& other) {
-            if (this == &other)
-                return *this;
-            VClip::operator =(other);
-            return *this;
-        }
-
-        SteppableVClip& operator=(SteppableVClip&& other) noexcept {
-            if (this == &other)
-                return *this;
-            VClip::operator =(std::move(other));
-            return *this;
-        }
+        [[nodiscard]] VClipState initialize() override;
+        [[nodiscard]] VClipState execute_vertex_edge() override;
+        [[nodiscard]] VClipState execute_edge_edge() override;
+        [[nodiscard]] VClipState execute_edge_face() override;
     };
 }

@@ -468,4 +468,124 @@ namespace cdlib
 
         return result;
     }
+
+    CollisionData VClipRaycast::get_collision_data()
+    {
+        return VClip::get_collision_data();
+    }
+
+    VClipState VClipRaycast::initialize()
+    {
+        // Check if the colliders are valid
+        if (!collider_1->is_valid() && !collider_2->is_valid()){
+            std::cerr << "Invalid colliders" << std::endl;
+            return ERROR;
+        }
+
+        // Choose the two features randomly (first vertex)
+        // TODO: Temporal coherence
+        feature_1 = collider_1->get_shape()->get_vertex(0);
+        feature_2 = collider_2->get_shape()->get_half_edge(0); // Choose the edge of the rayscast
+
+        return CONTINUE;
+    }
+
+    VClipState VClipRaycast::execute_vertex_edge()
+    {
+        const auto vertex = primary_feature<Vertex>();
+        const auto edge = secondary_feature<HalfEdge>();
+
+        // Clip E against V
+        const auto clip_data = clip_edge(edge, vertex);
+        if (clip_data.neighbour_l != nullptr && clip_data.neighbour_h == clip_data.neighbour_l){
+            set_feature<Vertex>(clip_data.neighbour_l);
+            return CONTINUE;
+        }
+
+        if (const auto feature_to_update = post_clip_derivative_check(clip_data); feature_to_update.has_value()){
+            set_feature<Vertex>(feature_to_update.value());
+            return CONTINUE;
+        }
+
+        return DONE;
+    }
+
+    VClipState VClipRaycast::execute_edge_edge()
+    {
+        const auto collider_edge = primary_feature<HalfEdge>();
+        const auto raycast_edge = secondary_feature<HalfEdge>();
+
+        // Same as in the normal VClip but only for one edge
+        const auto clip_data_vertex = clip_edge(raycast_edge, collider_edge, collider_edge->get_neighbour_vertices());
+        // If the edge_2 is completely beneath one of the vertex-edge planes
+        if (clip_data_vertex.simply_excluded()){
+            set_primary_feature(clip_data_vertex.neighbour_l);
+            return CONTINUE;
+        }
+
+        // Check derivatives
+        if (const auto feature_to_update = post_clip_derivative_check(clip_data_vertex); feature_to_update.has_value()){
+            set_primary_feature(feature_to_update.value());
+            return CONTINUE;
+        }
+
+        // Clip the edge_2 against the edge_1's face-edge planes
+        const auto clip_data_face = clip_edge(raycast_edge, collider_edge, collider_edge->get_neighbour_faces(), clip_data_vertex);
+        // If the edge_2 is completely beneath one of the face-edge planes
+        if (clip_data_face.simply_excluded()){
+            set_primary_feature(clip_data_face.neighbour_l);
+            return CONTINUE;
+        }
+
+        // Check derivatives
+        if (const auto feature_to_update = post_clip_derivative_check(clip_data_face); feature_to_update.has_value()){
+            set_primary_feature(feature_to_update.value());
+            return CONTINUE;
+        }
+
+        return DONE;
+    }
+
+    VClipState VClipRaycast::execute_edge_face()
+    {
+        const auto face = primary_feature<Face>();
+        const auto edge = secondary_feature<HalfEdge>();
+
+        // Clip the edge against the face
+        const auto clip_data = clip_edge(edge, face);
+
+        // If the edge is excluded
+        if (!clip_data.is_clipped) {
+            const auto neighbour = clip_data.neighbour_l != nullptr ? clip_data.neighbour_l : clip_data.neighbour_h;
+            if (neighbour == nullptr){
+                std::cerr << "Huhh?" << std::endl;
+                return ERROR;
+            }
+            const auto closest_feature = closest_face_vertex_to_edge(edge, face);
+            set_feature<Face>(closest_feature);
+            return CONTINUE;
+        }
+
+        // Find the distances of clipped points to the face
+        const auto distance_l = face->get_plane().distance_to(clip_data.point_l);
+        const auto distance_h = face->get_plane().distance_to(clip_data.point_h);
+
+        // If the sign of the distances is different we have a penetration
+        if (distance_l * distance_h <= 0){
+            return PENETRATION;
+        }
+
+        const auto derivative = distance_derivative_sign(clip_data.point_l, edge, face);
+        if (!derivative.has_value()){
+            std::cerr << "Degenerate case" << std::endl;
+            return ERROR;
+        }
+        if (derivative.value() >= 0){
+            set_feature<Face>(clip_data.neighbour_l);
+        } else {
+            set_feature<Face>(clip_data.neighbour_h);
+        }
+
+        return CONTINUE;
+    }
 }

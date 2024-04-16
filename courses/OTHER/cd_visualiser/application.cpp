@@ -605,14 +605,14 @@ void Application::raycast()
 
     raycasting = true;
 
-    // Create raycasting collider
-    auto ray_collider = std::make_shared<cdlib::RayCollider>(ray_origin, ray_direction);
-
-    raycast_collider = ray_collider;
-
     // Perform raycasting
     std::vector<std::shared_ptr<cdlib::Collider>> hits;
     if (selected_method == GJK_EPA) {
+        // Create raycasting collider
+        auto ray_collider = std::make_shared<cdlib::RayCollider>(ray_origin, ray_direction);
+
+        raycast_collider = ray_collider;
+
         for (const auto& convex_object : convex_objects)
         {
             auto gjk = cdlib::SteppableGJKEPA(convex_object->collider, ray_collider);
@@ -625,6 +625,18 @@ void Application::raycast()
             }
         }
         recalculate_minkowski_difference();
+    }
+    if (selected_method == V_CLIP) {
+        for (const auto& convex_object : convex_objects)
+        {
+            auto vclip = cdlib::VClipRaycast(convex_object->collider, ray_origin, ray_direction);
+            const auto [is_colliding, normal, depth, feature_1, feature_2] = vclip.get_collision_data();
+            if (is_colliding)
+            {
+                std::cout << "Depth: " << depth << std::endl;
+                hits.push_back(convex_object->collider);
+            }
+        }
     }
 
     std::cout << "Raycast hits: " << hits.size() << std::endl;
