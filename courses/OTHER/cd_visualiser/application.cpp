@@ -688,8 +688,31 @@ void Application::render_ui() {
     }
 
     // Slider for moving the objects closer together
-    ImGui::SliderFloat("Object distance", &object_distance, 1.0f, 0.0f);
-    ImGui::SliderFloat("Object rotation", &object_rotation_pos, 0.0f, 360.0f);
+    ImGui::Spacing();
+
+    ImGui::Checkbox("Move object around", &rotate_and_move_objects);
+    ImGui::Checkbox("Detailed positioning", &detailed_positioning);
+
+    if (!rotate_and_move_objects && !detailed_positioning)
+    {
+        ImGui::SliderFloat("Object distance", &object_distance, 1.0f, 0.0f);
+        ImGui::SliderFloat("Object rotation", &object_rotation_pos, 0.0f, 360.0f);
+    } else if (detailed_positioning) {
+        ImGui::Text("Object 1:");
+        ImGui::Columns(2, "objects", false);
+        ImGui::InputFloat3("Position##object_1", &object_position_1.x);
+        ImGui::NextColumn();
+        ImGui::InputFloat3("Rotation##object_1", &object_rotation_1.x);
+
+        ImGui::Columns();
+
+        ImGui::Text("Object 2:");
+        ImGui::Columns(2, "objects", false);
+        ImGui::InputFloat3("Position##object_2", &object_position_2.x);
+        ImGui::NextColumn();
+        ImGui::InputFloat3("Rotation##object_2", &object_rotation_2.x);
+    }
+    ImGui::Columns();
 
     ImGui::Spacing();
 

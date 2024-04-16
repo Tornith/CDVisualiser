@@ -74,6 +74,12 @@ protected:
     float object_rotation_pos = 0.0f;
     float last_object_rotation_pos = 0.0f;
 
+    bool detailed_positioning = false;
+    glm::vec3 object_position_1 = {0.0f, 1.0f, 2.0f};
+    glm::vec3 object_position_2 = {3.0f, 4.0f, 5.0f};
+    glm::vec3 object_rotation_1 = {1.0f, 2.0f, 3.0f};
+    glm::vec3 object_rotation_2 = {4.0f, 5.0f, 6.0f};
+
     bool show_wireframe = true;
     bool auto_calculate_collision = false;
     bool step_by_step = false;
@@ -97,6 +103,9 @@ protected:
 
     int last_extra_object_seed = 150;
     int last_extra_object_count = 6;
+
+    // Rotation and move test
+    bool rotate_and_move_objects = false;
 
     // Raycasting
     bool raycasting = false;
