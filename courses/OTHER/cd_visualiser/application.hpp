@@ -75,10 +75,10 @@ protected:
     float last_object_rotation_pos = 0.0f;
 
     bool detailed_positioning = false;
-    glm::vec3 object_position_1 = {-1.84843f, -0.865324f, 1.57496f};
-    glm::vec3 object_position_2 = {1.43894f, -1.20254f, -2.05068f};
-    glm::vec3 object_rotation_1 = {0.389848f, -0.461661f, 1.33907f};
-    glm::vec3 object_rotation_2 = {-0.685325f, -0.364292f, 1.31823f};
+    glm::vec3 object_position_1 = {0.207613, 0.0839348, -0.181136f};
+    glm::vec3 object_position_2 = {-0.140073, 0.128946, 0.207738f};
+    glm::vec3 object_rotation_1 = {-0.045387, 0.0528515, -0.135451f};
+    glm::vec3 object_rotation_2 = {0.0810966, 0.0382968, -0.135567f};
 
     bool show_wireframe = true;
     bool auto_calculate_collision = false;

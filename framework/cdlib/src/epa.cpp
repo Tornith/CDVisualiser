@@ -1,127 +1,135 @@
 #include "epa.hpp"
 
+#include <algorithm>
+#include <iostream>
+#include <optional>
+#include <ostream>
+#include <set>
+#include <unordered_map>
+
 namespace cdlib {
+    // Unique Edge struct
+    struct UniqueEdge {
+        size_t a;
+        size_t b;
+
+        bool operator==(const UniqueEdge& other) const {
+            return (a == other.a && b == other.b) || (a == other.b && b == other.a);
+        }
+    };
+
+    // Hash function for UniqueEdge
+    struct UniqueEdgeHash {
+        std::size_t operator()(const UniqueEdge& edge) const {
+            return std::hash<size_t>()(edge.a) ^ std::hash<size_t>()(edge.b);
+        }
+    };
+
+    std::pair<std::vector<glm::vec4>, size_t> get_face_normals(const std::vector<glm::vec3>& polytope, const std::vector<std::array<size_t, 3>>& faces) {
+        std::vector<glm::vec4> normals;
+        auto min_distance = std::numeric_limits<float>::max();
+        size_t min_index = 0;
+
+        for (const auto face : faces) {
+            const auto a = polytope[face[0]];
+            const auto b = polytope[face[1]];
+            const auto c = polytope[face[2]];
+
+            const auto normal = normalize(cross(b - a, c - a));
+            const auto distance = dot(normal, a);
+            const auto sign = glm::sign(distance);
+            normals.emplace_back(normal * sign, std::abs(distance));
+
+            if (std::abs(distance) < min_distance) {
+                min_index = normals.size() - 1;
+                min_distance = std::abs(distance);
+            }
+        }
+
+        return {normals, min_index};
+    }
+
     CollisionData EPA::get_collision_data() {
-        // Get the current face normals
-        auto [face_normals, min_triangle] = get_face_normals(faces);
-
+        // Get starting minimum face
         glm::vec3 min_normal;
-        float min_distance = std::numeric_limits<float>::max();
+        std::optional<float> min_distance = std::nullopt;
 
-        while (min_distance == std::numeric_limits<float>::max()) {
-            // Get the normal and distance of the closest triangle to the origin
-            min_normal = face_normals[min_triangle].normal;
-            min_distance = face_normals[min_triangle].distance;
+        // Debug print the colliders
+        std::cout << "Collider 1: " << collider_1->get_shape()->get_debug_data() << std::endl;
+        std::cout << "Collider 2: " << collider_2->get_shape()->get_debug_data() << std::endl;
 
-            // Get the support point (on the Minkowski difference) in the direction of the normal
-            auto support = collider_1->global_support(min_normal) - collider_2->global_support(-min_normal);
-            float distance = dot(min_normal, support);
+        bool repeated_point = false;
 
-            // Check if the support point is far enough from the current min triangle
-            if (abs(distance - min_distance) > EPA_EPSILON) {
-                min_distance = std::numeric_limits<float>::max();
-                std::vector<Edge> uniqueEdges;
+        while (!min_distance.has_value()) {
+            auto [normals, min_index] = get_face_normals(polytope, faces);
 
-                // Iterate through the faces of the polytope and retrieve a list of unique edges
-                for (size_t i = 0; i < face_normals.size(); i++) {
-                    // If the normal and support vector are facing the same direction
-                    if (dot(face_normals[i].normal, support) > dot(face_normals[i].normal, polytope[faces[i*3]])) {
-                        size_t face_idx = i * 3;
+            min_normal = glm::vec3(normals[min_index]);
+            min_distance = normals[min_index].w;
 
-                        // Add the current triangle's edges to the list of unique edges
-                        add_unique_edge(uniqueEdges, face_idx, face_idx + 1);
-                        add_unique_edge(uniqueEdges, face_idx + 1, face_idx + 2);
-                        add_unique_edge(uniqueEdges, face_idx + 2, face_idx);
-
-                        // Update the faces
-                        faces[face_idx + 2] = faces.back(); faces.pop_back();
-                        faces[face_idx + 1] = faces.back(); faces.pop_back();
-                        faces[face_idx] = faces.back(); faces.pop_back();
-
-                        // Update the face normals
-                        face_normals[i] = face_normals.back();
-                        face_normals.pop_back();
-
-                        // Decrement the counter because we removed a face
-                        i--;
-                    }
-                }
-
-                // Create a list of new faces using the unique edges and the new support vertex
-                std::vector<size_t> new_faces;
-                for (const auto [index_1, index_2] : uniqueEdges) {
-                    new_faces.push_back(index_1);
-                    new_faces.push_back(index_2);
-                    new_faces.push_back(polytope.size()); // The new support vertex
-                }
-
-                polytope.push_back(support); // Add the new support vertex
-
-                // Get the new face normals and the closest triangle to the origin with the newly added support vertex
-                auto [new_face_normals, new_min_triangle] = get_face_normals(new_faces);
-
-                float old_min_distance = std::numeric_limits<float>::max();
-                for (size_t i = 0; i < face_normals.size(); i++) {
-                    if (face_normals[i].distance < old_min_distance) {
-                        old_min_distance = face_normals[i].distance;
-                        min_triangle = i;
-                    }
-                }
-
-                if (new_face_normals[new_min_triangle].distance < old_min_distance) {
-                    min_triangle = new_min_triangle + face_normals.size();
-                }
-
-                faces.insert(faces.end(), new_faces.begin(), new_faces.end());
-                face_normals.insert(face_normals.end(), new_face_normals.begin(), new_face_normals.end());
-            }
-        }
-
-        return { true, min_normal, min_distance + EPA_EPSILON };
-    }
-
-    FaceNormalsData EPA::get_face_normals(const std::vector<size_t>& face_vector) const {
-        std::vector<FaceNormal> face_normals;
-        size_t minTriangle = 0;
-        float minDistance = std::numeric_limits<float>::max();
-
-        // Iterate through the faces of the polytope
-        for (auto i = face_vector.cbegin(); i != face_vector.cend();) {
-            // Get the vertices of the triangle
-            const glm::vec3& a = polytope[*i++];
-            const glm::vec3& b = polytope[*i++];
-            const glm::vec3& c = polytope[*i++];
-
-            // Calculate the normal and distance of the triangle
-            glm::vec3 normal = normalize(cross(b - a, c - a));
-            float distance = dot(normal, a);
-
-            // Flip the normal and distance if the normal is facing the wrong way
-            if (distance < 0) {
-                normal = -normal;
-                distance = -distance;
+            if (repeated_point) {
+                break;
             }
 
-            // Add the normal and distance to the list of face normals
-            face_normals.emplace_back(normal, distance);
+            // Get support in the point of the minimal normal
+            glm::vec3 support_1 = collider_1->global_support(min_normal);
+            glm::vec3 support_2 = collider_2->global_support(-min_normal);
 
-            // Check if the triangle is the closest to the origin
-            if (distance < minDistance) {
-                minTriangle = face_normals.size() - 1;
-                minDistance = distance;
+            glm::vec3 new_point = support_1 - support_2;
+
+            // If the new point is already in the polytope, we must have reached the closest face
+            if (std::ranges::find(polytope, new_point) != polytope.end()) {
+                repeated_point = true;
+                continue;
             }
+
+            // If the difference in distances is less than epsilon, then we got the same point as before and the face is the closest
+            if (std::abs(dot(new_point, min_normal) - min_distance.value()) < EPA_EPSILON) {
+                break;
+            }
+
+            // Otherwise we continue and reset the minimum distance
+            min_distance = std::nullopt;
+
+            // Filter out faces that are facing in the same direction as the new point
+            std::vector<glm::vec4> old_normals;
+            std::vector<std::array<size_t, 3>> old_faces;
+
+            std::vector<std::array<size_t, 3>> new_faces;
+            std::unordered_map<UniqueEdge, size_t, UniqueEdgeHash> edge_counter;
+            for (size_t i = 0; i < faces.size(); i++) {
+                if (dot(glm::vec3(normals[i]), new_point) - normals[i].w <= 0) {
+                    old_normals.push_back(normals[i]);
+                    old_faces.push_back(faces[i]);
+                    continue;
+                }
+
+                for (size_t j = 0; j < 3; j++) {
+                    const auto edge = UniqueEdge{faces[i][j], faces[i][(j + 1) % 3]};
+                    ++edge_counter[edge];
+                }
+            }
+
+            std::vector<UniqueEdge> unique_edges;
+            for (const auto& [edge, count] : edge_counter) {
+                if (count == 1) unique_edges.push_back(edge);
+            }
+
+            // For each of the endpoints of the unique edges, create a new face with the new point
+            for (const auto& [a, b] : unique_edges) {
+                new_faces.push_back({a, b, polytope.size()});
+            }
+
+            polytope.push_back(new_point);
+
+            // Concatenate the old and new arrays
+            faces = old_faces;
+            faces.insert(faces.end(), new_faces.begin(), new_faces.end());
         }
 
-        return { std::move(face_normals), minTriangle };
-    }
-
-    void EPA::add_unique_edge(std::vector<Edge>& edges, const size_t a, const size_t b) const {
-        // A neighboring face edge is in reverse order, due to the winding order of the triangle
-        // We want to only store unique edges as to later repair the faces with the newly added support vertex
-        if (const auto reverse_edge = std::ranges::find(edges, Edge{faces[b], faces[a]}); reverse_edge == edges.end()) {
-            edges.emplace_back(faces[a], faces[b]);
-        } else {
-            edges.erase(reverse_edge);
-        }
+        return {
+            true,
+            min_normal,
+            min_distance.value() + 0.001f
+        };
     }
 }

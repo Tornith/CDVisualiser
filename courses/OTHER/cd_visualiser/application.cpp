@@ -204,6 +204,11 @@ void Application::random_move_objects() {
         const auto m = trans * rot;
 
         convex_objects[i]->set_model_matrix(m);
+
+        // If the object is the first one and second one print the position and rotation
+        if (i == 0 || i == 1) {
+            std::cout << "Object " << i + 1 << " position: " << random.x << ", " << random.y << ", " << random.z << "   rotation: " << rotation.x << ", " << rotation.y << ", " << rotation.z << std::endl;
+        }
     }
 }
 
@@ -235,6 +240,16 @@ void Application::recalculate_minkowski_difference() {
     auto om = ConvexObject{ std::move(vm), mm, nullptr, sm };
 
     minkowski_object = std::make_shared<ConvexObject>(std::move(om));
+
+    // Print the vertices (as "Minkowski: [(x, y, z), ...]") without the float f suffix
+    std::cout << "Minkowski: [";
+    for (size_t i = 0; i < pm.size(); i++) {
+        std::cout << "(" << pm[i].x << ", " << pm[i].y << ", " << pm[i].z << ")";
+        if (i < pm.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "]" << std::endl;
 }
 
 std::vector<std::array<float, 3>> Application::random_points(int seed) {
@@ -1030,7 +1045,7 @@ void Application::gjk_step_visualize(cdlib::SteppableGJKState state) {
         // Create a new direction from the average to the origin
         direction_highlights.emplace_back(gjk.get_direction(), average);
     }
-    else if (state == cdlib::SteppableGJKState::EPA) {
+    else if (state == cdlib::SteppableGJKState::EPA || state == cdlib::SteppableGJKState::FINISHED) {
         std::cout << "EPA" << std::endl;
         const auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
         if (is_colliding) {

@@ -79,7 +79,6 @@ namespace cdlib {
         return normal;
     }
 
-
     bool GJK::origin_in_simplex() {
         // If the simplex is a point, line or triangle we skip
         if (simplex.size() < 4) {
@@ -115,7 +114,6 @@ namespace cdlib {
 
         return glm::dot(normal, ao);
     }
-
 
     // Sanity check, if we crossed the origin
     bool GJK::passed_origin(const glm::vec3& normal, const glm::vec3& point) {
