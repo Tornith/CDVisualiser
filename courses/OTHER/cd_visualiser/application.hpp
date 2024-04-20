@@ -75,10 +75,10 @@ protected:
     float last_object_rotation_pos = 0.0f;
 
     bool detailed_positioning = false;
-    glm::vec3 object_position_1 = {0.0f, 1.0f, 2.0f};
-    glm::vec3 object_position_2 = {3.0f, 4.0f, 5.0f};
-    glm::vec3 object_rotation_1 = {1.0f, 2.0f, 3.0f};
-    glm::vec3 object_rotation_2 = {4.0f, 5.0f, 6.0f};
+    glm::vec3 object_position_1 = {-1.84843f, -0.865324f, 1.57496f};
+    glm::vec3 object_position_2 = {1.43894f, -1.20254f, -2.05068f};
+    glm::vec3 object_rotation_1 = {0.389848f, -0.461661f, 1.33907f};
+    glm::vec3 object_rotation_2 = {-0.685325f, -0.364292f, 1.31823f};
 
     bool show_wireframe = true;
     bool auto_calculate_collision = false;
@@ -99,13 +99,15 @@ protected:
 
     // Extra objects
     int extra_object_seed = 150;
-    int extra_object_count = 6;
+    int extra_object_count = 0;
 
     int last_extra_object_seed = 150;
     int last_extra_object_count = 6;
 
     // Rotation and move test
     bool rotate_and_move_objects = false;
+    float random_move_speed = 0.1f;
+    float random_move_spread = 10.f;
 
     // Raycasting
     bool raycasting = false;
@@ -168,9 +170,13 @@ public:
 
     static glm::vec3 pseudorandom_point(int seed);
 
+    static glm::vec3 perlin_noise(size_t seed, long double time);
+
     void raycast();
 
     void recalculate_positions();
+    void recalculate_detailed_positioning();
+    void random_move_objects();
 
     void recalculate_minkowski_difference();
 

@@ -2,6 +2,7 @@
 
 #include <functional>
 
+#include "bruteforce.hpp"
 #include "voronoi.hpp"
 
 namespace cdlib
@@ -90,7 +91,7 @@ namespace cdlib
             return PENETRATION;
         }
 
-        set_primary_feature(face_max);
+        set_feature<Face>(face_max);
         return CONTINUE;
     }
 
@@ -98,13 +99,15 @@ namespace cdlib
         FeatureP closest_feature = nullptr;
         auto closest_distance = std::numeric_limits<float>::max();
         for (const auto& vertex : face->get_vertices()){
-            if (const auto distance = feature_distance(vertex, clipped_edge); distance < closest_distance){
+            const auto distance = feature_distance(vertex, clipped_edge);
+            if (distance < closest_distance){
                 closest_distance = distance;
                 closest_feature = vertex;
             }
         }
         for (const auto& edge : face->get_edges()){
-            if (const auto distance = feature_distance(edge, clipped_edge); distance < closest_distance){
+            const auto distance = feature_distance(edge, clipped_edge);
+            if (distance < closest_distance){
                 closest_distance = distance;
                 closest_feature = edge;
             }
@@ -353,6 +356,19 @@ namespace cdlib
             return execute_edge_face();
         }
         std::cerr << "Invalid state" << std::endl;
+
+        const auto transform1 = collider_1->get_transform();
+        const auto transform2 = collider_2->get_transform();
+
+        const auto position1 = glm::vec3(transform1[3]);
+        const auto position2 = glm::vec3(transform2[3]);
+
+        const auto rotation1 = glm::eulerAngles(glm::quat_cast(transform1));
+        const auto rotation2 = glm::eulerAngles(glm::quat_cast(transform2));
+
+        std::cerr << "Object 1: Position: " << position1.x << " " << position1.y << " " << position1.z << ", Rotation: " << rotation1.x << " " << rotation1.y << " " << rotation1.z << std::endl;
+        std::cerr << "Object 2: Position: " << position2.x << " " << position2.y << " " << position2.z << ", Rotation: " << rotation2.x << " " << rotation2.y << " " << rotation2.z << std::endl;
+
         return ERROR;
     }
 
@@ -364,6 +380,17 @@ namespace cdlib
             if (iteration++ > 10000){
                 if (first_looping_features.first == feature_1 && first_looping_features.second == feature_2){
                     std::cerr << "Infinite loop finished" << std::endl;
+                    const auto transform1 = collider_1->get_transform();
+                    const auto transform2 = collider_2->get_transform();
+
+                    const auto position1 = glm::vec3(transform1[3]);
+                    const auto position2 = glm::vec3(transform2[3]);
+
+                    const auto rotation1 = glm::eulerAngles(glm::quat_cast(transform1));
+                    const auto rotation2 = glm::eulerAngles(glm::quat_cast(transform2));
+
+                    std::cerr << "Object 1: Position: " << position1.x << " " << position1.y << " " << position1.z << ", Rotation: " << rotation1.x << " " << rotation1.y << " " << rotation1.z << std::endl;
+                    std::cerr << "Object 2: Position: " << position2.x << " " << position2.y << " " << position2.z << ", Rotation: " << rotation2.x << " " << rotation2.y << " " << rotation2.z << std::endl;
                     return { false };
                 }
                 std::cerr << "Infinite loop" << std::endl;
@@ -394,43 +421,19 @@ namespace cdlib
         feature_2 = nullptr;
     }
 
-    bool VClip::debug_brute_force(const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const {
-        // Test every combination of features on both colliders
-        const auto vertices_1 = collider_1->get_shape()->get_vertices() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
-        const auto vertices_2 = collider_2->get_shape()->get_vertices() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
-        const auto edges_1 = collider_1->get_shape()->get_half_edges() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
-        const auto edges_2 = collider_2->get_shape()->get_half_edges() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
-        const auto faces_1 = collider_1->get_shape()->get_faces() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
-        const auto faces_2 = collider_2->get_shape()->get_faces() | std::ranges::views::transform([](const auto& vertex) { return std::dynamic_pointer_cast<Feature>(vertex); });
+    bool VClip::debug_brute_force(bool should_collide, const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const {
+        auto bruteforce = Bruteforce(collider_1, collider_2);
+        const auto [is_colliding, normal, min_distance, min_feature_1, min_feature_2] = bruteforce.get_collision_data();
 
-        // Combine all features into one vector
-        std::vector<FeatureP> features_1;
-        features_1.insert(features_1.end(), vertices_1.begin(), vertices_1.end());
-        features_1.insert(features_1.end(), edges_1.begin(), edges_1.end());
-        features_1.insert(features_1.end(), faces_1.begin(), faces_1.end());
+        if (is_colliding && should_collide){
+            return true;
+        }
 
-        std::vector<FeatureP> features_2;
-        features_2.insert(features_2.end(), vertices_2.begin(), vertices_2.end());
-        features_2.insert(features_2.end(), edges_2.begin(), edges_2.end());
-        features_2.insert(features_2.end(), faces_2.begin(), faces_2.end());
-
-        // Test every combination of features
-        auto min_distance = std::numeric_limits<float>::max();
-        FeatureP min_feature_1 = nullptr;
-        FeatureP min_feature_2 = nullptr;
-        for (const auto& feature_1 : features_1){
-            for (const auto& feature_2 : features_2){
-                if (feature_1 == feature_2){
-                    continue;
-                }
-
-                const auto distance = feature_distance(feature_1, feature_2);
-                if (distance < min_distance){
-                    min_distance = distance;
-                    min_feature_1 = feature_1;
-                    min_feature_2 = feature_2;
-                }
-            }
+        if (is_colliding != should_collide){
+            std::cerr << "Brute force failed" << std::endl;
+            std::cerr << "Expected: collision(" << should_collide << ")" << std::endl;
+            std::cerr << "Got: collision(" << is_colliding << ")" << std::endl;
+            return false;
         }
 
         auto check_if_features_equal = [](const FeatureP& f1, const FeatureP& f2) {

@@ -163,6 +163,57 @@ void Application::recalculate_positions() {
     object_2->set_model_matrix(m2);
 }
 
+void Application::recalculate_detailed_positioning() {
+    // Create a rotation matrix from object_rotation_1 and object_rotation_2
+    const auto rot1X = glm::rotate(glm::mat4(1.0f), object_rotation_1.x, glm::vec3(1.0f, 0.0f, 0.0f));
+    const auto rot1Y = glm::rotate(glm::mat4(1.0f), object_rotation_1.y, glm::vec3(0.0f, 1.0f, 0.0f));
+    const auto rot1Z = glm::rotate(glm::mat4(1.0f), object_rotation_1.z, glm::vec3(0.0f, 0.0f, 1.0f));
+    const auto rot1 = rot1Z * rot1Y * rot1X;
+
+    const auto rot2X = glm::rotate(glm::mat4(1.0f), object_rotation_2.x, glm::vec3(1.0f, 0.0f, 0.0f));
+    const auto rot2Y = glm::rotate(glm::mat4(1.0f), object_rotation_2.y, glm::vec3(0.0f, 1.0f, 0.0f));
+    const auto rot2Z = glm::rotate(glm::mat4(1.0f), object_rotation_2.z, glm::vec3(0.0f, 0.0f, 1.0f));
+    const auto rot2 = rot2Z * rot2Y * rot2X;
+
+    // Create a translation matrix from object_position_1 and object_position_2
+    const auto trans1 = glm::translate(glm::mat4(1.0f), object_position_1);
+    const auto trans2 = glm::translate(glm::mat4(1.0f), object_position_2);
+
+    // Combine the rotation and translation matrices
+    const auto m1 = trans1 * rot1;
+    const auto m2 = trans2 * rot2;
+
+    // Set the model matrices of the objects
+    object_1->set_model_matrix(m1);
+    object_2->set_model_matrix(m2);
+}
+
+void Application::random_move_objects() {
+    // for each object, move it in a random direction
+    for (size_t i = 0; i < convex_objects.size(); i++) {
+        const auto random = perlin_noise(i, elapsed_time * random_move_speed * 0.001f) * random_move_spread;
+        const auto rotation = perlin_noise(i + 10000, elapsed_time * random_move_speed * 0.001f) * 2.0f * glm::pi<float>();
+
+        const auto rotX = rotate(glm::mat4(1.0f), rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+        const auto rotY = rotate(glm::mat4(1.0f), rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+        const auto rotZ = rotate(glm::mat4(1.0f), rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+        const auto rot = rotZ * rotY * rotX;
+
+        const auto trans = translate(glm::mat4(1.0f), random);
+
+        const auto m = trans * rot;
+
+        convex_objects[i]->set_model_matrix(m);
+    }
+}
+
+glm::vec3 Application::perlin_noise(const size_t seed, const long double time) {
+    const auto x = perlin(glm::vec2(seed, time));
+    const auto y = perlin(glm::vec2(1354 * seed + 100, time));
+    const auto z = perlin(glm::vec2(2708 * seed + 200, time));
+    return {x, y, z};
+}
+
 void Application::recalculate_minkowski_difference() {
     // If the minkowski object pointer is not null, find it in the convex_objects array and remove it
     if (minkowski_object) {
@@ -333,7 +384,7 @@ void Application::update(float delta) {
     phong_lights_ubo.add(PhongLightData::CreateDirectionalLight(light_position, glm::vec3(0.75f), glm::vec3(0.9f), glm::vec3(1.0f)));
     phong_lights_ubo.update_opengl_data();
 
-    if (abs(object_distance - last_object_distance) > std::numeric_limits<float>::epsilon() || abs(object_rotation_pos - last_object_rotation_pos) > std::numeric_limits<float>::epsilon()) {
+    if (rotate_and_move_objects || detailed_positioning || (abs(object_distance - last_object_distance) > std::numeric_limits<float>::epsilon() || abs(object_rotation_pos - last_object_rotation_pos) > std::numeric_limits<float>::epsilon())) {
         last_object_distance = object_distance;
         last_object_rotation_pos = object_rotation_pos;
         update_object_positions();
@@ -341,7 +392,13 @@ void Application::update(float delta) {
 }
 
 void Application::update_object_positions() {
-    recalculate_positions();
+    if (rotate_and_move_objects) {
+        random_move_objects();
+    } else if (detailed_positioning) {
+        recalculate_detailed_positioning();
+    } else {
+        recalculate_positions();
+    }
     recalculate_minkowski_difference();
 
     highlighted_feature_1 = nullptr;
@@ -691,7 +748,9 @@ void Application::render_ui() {
     ImGui::Spacing();
 
     ImGui::Checkbox("Move object around", &rotate_and_move_objects);
-    ImGui::Checkbox("Detailed positioning", &detailed_positioning);
+    if (!rotate_and_move_objects) {
+        ImGui::Checkbox("Detailed positioning", &detailed_positioning);
+    }
 
     if (!rotate_and_move_objects && !detailed_positioning)
     {
@@ -711,6 +770,9 @@ void Application::render_ui() {
         ImGui::InputFloat3("Position##object_2", &object_position_2.x);
         ImGui::NextColumn();
         ImGui::InputFloat3("Rotation##object_2", &object_rotation_2.x);
+    } else if (rotate_and_move_objects) {
+        ImGui::SliderFloat("Random move speed", &random_move_speed, 0.0f, 10.0f);
+        ImGui::SliderFloat("Random move spread", &random_move_spread, 0.0f, 100.0f);
     }
     ImGui::Columns();
 
@@ -819,7 +881,7 @@ void Application::render_ui() {
                 std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
 
                 if (brute_force_test) {
-                    auto bruteforce_result = vclip.debug_brute_force(feature_1, feature_2);
+                    auto bruteforce_result = vclip.debug_brute_force(is_colliding, feature_1, feature_2);
                     if (!bruteforce_result) {
                         std::cerr << "Bruteforce test failed for: dist=" << object_distance << " rot=" << object_rotation_pos << std::endl;
                     }
@@ -866,7 +928,7 @@ void Application::render_ui() {
             ImGui::Text("Distance: %f", depth);
 
             if (brute_force_test) {
-                auto bruteforce_result = vclip.debug_brute_force(feature_1, feature_2);
+                auto bruteforce_result = vclip.debug_brute_force(is_colliding, feature_1, feature_2);
                 if (!bruteforce_result) {
                     std::cerr << "Bruteforce test failed for: dist=" << object_distance << " rot=" << object_rotation_pos << std::endl;
                 }

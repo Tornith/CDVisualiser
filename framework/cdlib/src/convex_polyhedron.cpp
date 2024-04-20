@@ -186,30 +186,52 @@ namespace cdlib {
     }
 
     float distance_line_line(const glm::vec3& a1, const glm::vec3& a2, const glm::vec3& b1, const glm::vec3& b2) {
-        const auto e1 = a2 - a1;
-        const auto e2 = b2 - b1;
+        const auto d1 = a2 - a1;
+        const auto d2 = b2 - b1;
 
-        const auto n = cross(e1, e2);
+        const auto r = a1 - b1;
+        const auto a = dot(d1, d1);
+        const auto e = dot(d2, d2);
+        const auto f = dot(d2, r);
 
-        // Check if the lines are parallel
-        if (length(n) < 1e-6f) {
+        // Check if some or both lines are degenerate
+        if (a < 1e-6f && e < 1e-6f) {
+            return distance(a1, b1);
+        }
+        if (a < 1e-6f) {
             return distance_point_line(a1, b1, b2);
         }
+        if (e < 1e-6f) {
+            return distance_point_line(b1, a1, a2);
+        }
 
-        const auto d = abs(glm::dot(n, a1 - b1)) / length(n);
+        // If the lines are not degenerate, calculate the closest points
+        float b = dot(d1, d2);
+        float c = dot(d1, r);
+        float denom = a * e - b * b;
 
-        // Calculate the parameters for clamp
-        const auto t1 = dot(cross(e2, n), b1 - a1) / dot(n, n);
-        const auto t2 = dot(cross(e1, n), b1 - a1) / dot(n, n);
+        // Calculate the parameters of the closest points
+        float s;
+        if (denom > 1e-6f) {
+            s = glm::clamp((b * f - c * e) / denom, 0.0f, 1.0f);
+        } else {
+            s = 0.0f;
+        }
 
-        // Clamp the parameters to the line segment
-        const auto t1_clamped = glm::clamp(t1, 0.0f, 1.0f);
-        const auto t2_clamped = glm::clamp(t2, 0.0f, 1.0f);
+        float t = (b * s + f) / e;
+        if (t < 0.0f) {
+            t = 0.0f;
+            s = glm::clamp(-c / a, 0.0f, 1.0f);
+        } else if (t > 1.0f) {
+            t = 1.0f;
+            s = glm::clamp((b - c) / a, 0.0f, 1.0f);
+        }
 
-        const auto p1 = a1 + e1 * t1_clamped;
-        const auto p2 = b1 + e2 * t2_clamped;
+        // Get the closest points on the lines
+        const auto c1 = a1 + d1 * s;
+        const auto c2 = b1 + d2 * t;
 
-        return distance(p1, p2);
+        return distance(c1, c2);
     }
 
     float distance_line_triangle(const glm::vec3& a, const glm::vec3& b, const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2) {

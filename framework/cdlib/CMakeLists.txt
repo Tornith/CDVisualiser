@@ -32,9 +32,11 @@ target_sources(
         include/epa.hpp
         include/sap.hpp
         include/vclip.hpp
+        include/bruteforce.hpp
 
         src/gjk.cpp
         src/epa.cpp
         src/sap.cpp
         src/vclip.cpp
+        src/bruteforce.cpp
 )

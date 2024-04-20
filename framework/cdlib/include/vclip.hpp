@@ -212,7 +212,7 @@ namespace cdlib{
 
         [[nodiscard]] CollisionData get_collision_data() override;
 
-        [[nodiscard]] bool debug_brute_force(const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const;
+        [[nodiscard]] bool debug_brute_force(bool should_collide, const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const;
     };
 
     [[nodiscard]] ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature);
