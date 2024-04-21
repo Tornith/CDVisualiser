@@ -14,8 +14,8 @@ namespace cdlib {
 
         for (int i = 0; i < MAX_ITERATIONS; i++) {
             // Get the support points
-            glm::vec3 a = collider_1->global_support(direction);
-            glm::vec3 b = collider_2->global_support(-direction);
+            glm::vec3 a = collider_1->support(direction);
+            glm::vec3 b = collider_2->support(-direction);
 
             // Get the new point
             glm::vec3 new_point = a - b;
@@ -123,17 +123,17 @@ namespace cdlib {
     std::pair<glm::vec3, std::optional<long long>> GJK::next_direction() const {
         // If the simplex is a point, return the opposite of the point
         if (simplex.size() == 1) {
-            return { -simplex[0], std::nullopt };
+            return { normalize(-simplex[0]), std::nullopt };
         }
 
         // If the simplex is a line, return the normal of the line
         if (simplex.size() == 2) {
-            return { get_line_normal(simplex[0], simplex[1]), std::nullopt };
+            return { normalize(get_line_normal(simplex[0], simplex[1])), std::nullopt };
         }
 
         // If the simplex is a triangle, return the normal of the triangle
         if (simplex.size() == 3) {
-            return { get_face_normal(simplex[0], simplex[1], simplex[2]), std::nullopt };
+            return { normalize(get_face_normal(simplex[0], simplex[1], simplex[2])), std::nullopt };
         }
 
         // Otherwise the simplex is a tetrahedron, we need to evolve the simplex properly
@@ -153,17 +153,17 @@ namespace cdlib {
         if (dot(abdN, d0) > 0) {
             // The origin is on the outside of the face ABD
             // We can remove the point C
-            return { abdN, 2 };
+            return { normalize(abdN), 2 };
         }
         if (dot(bcdN, d0) > 0) {
             // The origin is on the outside of the face BCD
             // We can remove the point A
-            return { bcdN, 0 };
+            return { normalize(bcdN), 0 };
         }
         if (dot(cadN, d0) > 0) {
             // The origin is on the outside of the face CAD
             // We can remove the point B
-            return { cadN, 1 };
+            return { normalize(cadN), 1 };
         }
         throw std::runtime_error("This should never happen, since we check for the origin in simplex earlier");
     }
@@ -222,8 +222,8 @@ namespace cdlib {
 
     void SteppableGJK::iteration_substep_1() {
         // Get the support points
-        current_point_a = collider_1->global_support(direction);
-        current_point_b = collider_2->global_support(-direction);
+        current_point_a = collider_1->support(direction);
+        current_point_b = collider_2->support(-direction);
 
         // Get the new point
         current_new_point = current_point_a - current_point_b;

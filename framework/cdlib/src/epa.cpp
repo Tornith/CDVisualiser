@@ -4,7 +4,6 @@
 #include <iostream>
 #include <optional>
 #include <ostream>
-#include <set>
 #include <unordered_map>
 
 namespace cdlib {
@@ -71,8 +70,8 @@ namespace cdlib {
             }
 
             // Get support in the point of the minimal normal
-            glm::vec3 support_1 = collider_1->global_support(min_normal);
-            glm::vec3 support_2 = collider_2->global_support(-min_normal);
+            glm::vec3 support_1 = collider_1->support(min_normal);
+            glm::vec3 support_2 = collider_2->support(-min_normal);
 
             glm::vec3 new_point = support_1 - support_2;
 
