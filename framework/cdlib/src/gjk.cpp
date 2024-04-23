@@ -178,7 +178,7 @@ namespace cdlib {
         }
 
         // If the objects are colliding, we can use the EPA algorithm to get the collision data
-        EPA epa(collider_1, collider_2, simplex);
+        EPA epa(collider_1, collider_2, Simplex(simplex));
         return epa.get_collision_data();
     }
 
@@ -363,7 +363,7 @@ namespace cdlib {
             return;
         }
 
-        EPA epa(collider_1, collider_2, simplex);
+        EPA epa(collider_1, collider_2, Simplex(simplex));
         collision_data = epa.get_collision_data();
     }
 }

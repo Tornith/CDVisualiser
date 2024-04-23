@@ -64,7 +64,7 @@ void Application::prepare_scene() {
 }
 
 void Application::prepare_collision_detectors() {
-    gjk = cdlib::SteppableGJKEPA(object_1->collider, object_2->collider);
+    gjk = cdlib::SteppableGJK2(object_1->collider, object_2->collider);
     recalculate_minkowski_difference();
 
     vclip = cdlib::VClip(object_1->collider, object_2->collider);
@@ -687,8 +687,7 @@ void Application::raycast()
 
         for (const auto& convex_object : convex_objects)
         {
-            auto gjk = cdlib::SteppableGJKEPA(convex_object->collider, ray_collider);
-            gjk.evaluate();
+            auto gjk = cdlib::GJK2EPA(convex_object->collider, ray_collider);
             const auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
             if (is_colliding)
             {
@@ -822,9 +821,9 @@ void Application::render_ui() {
         if (!auto_calculate_collision) {
             // Button for manual collision calculation
             if (ImGui::Button("Calculate collision")) {
+                gjk.reset();
                 // auto result = gjk.is_colliding();
                 // std::cout << "Collision: " << result << std::endl;
-                gjk.evaluate();
                 auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
                 std::cout << "Collision: " << is_colliding << std::endl;
                 if (is_colliding) {
@@ -842,12 +841,12 @@ void Application::render_ui() {
             if (!step_by_step) {
                 if (ImGui::Button("Start step-by-step")) {
                     step_by_step = true;
-                    gjk.step_by_step_init();
+                    gjk.reset();
                 }
             } else {
                 // ImGui::Text("Current vertex: %d / %d", current_vertex, max_vertex);
                 if (ImGui::Button("Next step")) {
-                    gjk_step_visualize(gjk.step_by_step_next());
+                    gjk_step_visualize(gjk.step());
                 }
                 if (ImGui::Button("Cancel step-by-step")) {
                     step_by_step = false;
@@ -863,7 +862,7 @@ void Application::render_ui() {
         else {
             direction_highlights.clear();
             direction_highlight_objects.clear();
-            gjk.evaluate();
+            gjk.reset();
             auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
 
             if (is_colliding) {
@@ -972,65 +971,38 @@ void Application::render_ui() {
     ImGui::End();
 }
 
-void Application::gjk_step_visualize(cdlib::SteppableGJKState state) {
+void Application::gjk_step_visualize(cdlib::GJK2State state){
     create_vertex_highlight_objects();
-    if (state == cdlib::SteppableGJKState::UNDEFINED) {
+    if (state == cdlib::GJK2State::ERROR) {
         step_by_step = false;
-        std::cerr << "Undefined state" << std::endl;
+        std::cerr << "Error state" << std::endl;
     }
-    else if (state == cdlib::SteppableGJKState::FINISHED) {
-        std::cout << "Finished with result: " << gjk.is_colliding() << std::endl;
-        step_by_step = false;
-    }
-    else if (state == cdlib::SteppableGJKState::UNINITIALIZED) {
-        std::cout << "Initializing simplex with direction" << std::endl;
-        std::cout << " - Direction: " << gjk.get_direction().x << " " << gjk.get_direction().y << " " << gjk.get_direction().z << std::endl;
-        // Create the line from the origin to the direction
-        direction_highlights.emplace_back(gjk.get_direction(), glm::vec3(0.0f));
-    }
-    else if (state == cdlib::SteppableGJKState::ITERATION_1) {
-        direction_highlights.clear();
-        std::cout << "Iteration 1" << std::endl;
-        std::cout << " - New points:" << std::endl;
-        std::cout << "   - A:   " << gjk.get_current_point_a().x << " " << gjk.get_current_point_a().y << " " << gjk.get_current_point_a().z << std::endl;
-        std::cout << "   - B:   " << gjk.get_current_point_b().x << " " << gjk.get_current_point_b().y << " " << gjk.get_current_point_b().z << std::endl;
-        std::cout << "   - New: " << gjk.get_current_new_point().x << " " << gjk.get_current_new_point().y << " " << gjk.get_current_new_point().z << std::endl;
-        if (gjk.get_current_state() == cdlib::SteppableGJKState::ITERATION_1) { // i.e. the next iteration is also iteration 1
-            std::cout << " - Simplex too small to continue:" << std::endl;
-            std::cout << " - New simplex:" << std::endl;
-            for (int i = 0; i < gjk.get_simplex().size(); i++) {
-                std::cout << "   - " << i << ": " << gjk.get_simplex()[i].x << " " << gjk.get_simplex()[i].y << " " << gjk.get_simplex()[i].z << std::endl;
-            }
-            std::cout << " - New Direction: " << gjk.get_direction().x << " " << gjk.get_direction().y << " " << gjk.get_direction().z << std::endl;
+    else if (state == cdlib::GJK2State::EPA_FINISHED)
+    {
+        std::cout << "EPA" << std::endl;
+        const auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_result();
+        if (is_colliding) {
+            std::cout << " - Collision normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+            std::cout << " - Collision depth: " << depth << std::endl;
 
-            // Average the points in the simplex
-            auto average = glm::vec3(0.0f);
-            for (const auto& point : gjk.get_simplex()) {
-                average += point;
-            }
-            average /= static_cast<float>(gjk.get_simplex().size());
-            // Create a new direction from the average to the origin
-            direction_highlights.emplace_back(gjk.get_direction(), average);
+            // Draw the collision normal from origin
+            direction_highlights.emplace_back(normal, glm::vec3(0.0f));
+        }
+        else {
+            std::cout << " - No collision data" << std::endl;
         }
     }
-    else if (state == cdlib::SteppableGJKState::ITERATION_2) {
-        direction_highlights.clear();
-        std::cout << "Iteration 2" << std::endl;
-        std::cout << " - Sanity check: " << (gjk.get_gjk_finished() ? "Failed, stopped" : "Passed, continuing...") << std::endl;
+    else if (state == cdlib::GJK2State::COLLISION)
+    {
+        std::cout << "Collision detected" << std::endl;
     }
-    else if (state == cdlib::SteppableGJKState::ITERATION_3) {
-        std::cout << "Iteration 3" << std::endl;
-        std::cout << " - New simplex:" << std::endl;
-        for (int i = 0; i < gjk.get_simplex().size(); i++) {
-            std::cout << "   - " << i << ": " << gjk.get_simplex()[i].x << " " << gjk.get_simplex()[i].y << " " << gjk.get_simplex()[i].z << std::endl;
-        }
+    else if (state == cdlib::GJK2State::NO_COLLISION)
+    {
+        std::cout << "No collision detected" << std::endl;
     }
-    else if (state == cdlib::SteppableGJKState::ITERATION_4) {
-        std::cout << "Iteration 4" << std::endl;
-        std::cout << " - Origin in simplex check: " << (gjk.get_gjk_finished() ? "Passed, stopped" : "Failed, continuing...") << std::endl;
-    }
-    else if (state == cdlib::SteppableGJKState::ITERATION_5) {
-        std::cout << "Iteration 5" << std::endl;
+    else if (state == cdlib::GJK2State::CONTINUE || state ==cdlib::GJK2State::INIT)
+    {
+        std::cout << "Iteration step" << std::endl;
         std::cout << " - New direction: " << gjk.get_direction().x << " " << gjk.get_direction().y << " " << gjk.get_direction().z << std::endl;
         std::cout << " - New simplex:" << std::endl;
         for (int i = 0; i < gjk.get_simplex().size(); i++) {
@@ -1044,20 +1016,6 @@ void Application::gjk_step_visualize(cdlib::SteppableGJKState state) {
         average /= static_cast<float>(gjk.get_simplex().size());
         // Create a new direction from the average to the origin
         direction_highlights.emplace_back(gjk.get_direction(), average);
-    }
-    else if (state == cdlib::SteppableGJKState::EPA || state == cdlib::SteppableGJKState::FINISHED) {
-        std::cout << "EPA" << std::endl;
-        const auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
-        if (is_colliding) {
-            std::cout << " - Collision normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
-            std::cout << " - Collision depth: " << depth << std::endl;
-
-            // Draw the collision normal from origin
-            direction_highlights.emplace_back(normal, glm::vec3(0.0f));
-        }
-        else {
-            std::cout << " - No collision data" << std::endl;
-        }
     }
     draw_direction_highlights();
 }

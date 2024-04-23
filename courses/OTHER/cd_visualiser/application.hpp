@@ -1,6 +1,5 @@
 #pragma once
 #include "camera_ubo.hpp"
-#include "gjk.hpp"
 #include "light_ubo.hpp"
 #include "pv227_application.hpp"
 #include "scene_object.hpp"
@@ -8,7 +7,7 @@
 #include "QuickHull.hpp"
 #include "sap.hpp"
 #include "vclip.hpp"
-#include "voronoi.hpp"
+#include "gjk2.hpp"
 
 class ColliderAppWrapper {
     std::unique_ptr<cdlib::NarrowCollisionDetector> collision_detector;
@@ -116,7 +115,7 @@ protected:
     glm::vec3 ray_direction;
 
     // GJK Specific
-    cdlib::SteppableGJKEPA gjk;
+    cdlib::SteppableGJK2 gjk;
 
     std::shared_ptr<ConvexObject> minkowski_object;
 
@@ -190,7 +189,7 @@ public:
 
     void update_object_positions();
 
-    void gjk_step_visualize(cdlib::SteppableGJKState state);
+    void gjk_step_visualize(cdlib::GJK2State state);
 
     // ----------------------------------------------------------------------------
     // Render

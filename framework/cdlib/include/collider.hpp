@@ -169,13 +169,15 @@ namespace cdlib {
         }
 
         [[nodiscard]] glm::vec3 support(const glm::vec3& direction) const override {
+            const auto rotated_direction = glm::vec3(shape->get_transform() * glm::vec4(direction, 0.0f));
+
             // Find the vertex that is the furthest in the given direction
-            float max_dot = dot(shape->get_vertex(0)->get_position(), direction);
+            float max_dot = dot(shape->get_vertex(0)->get_position(), rotated_direction);
             size_t max_index = 0;
 
             // Start loop at 1 as we've already calculated for vertex 0
             for (size_t i = 1; i < shape->get_vertices().size(); i++) {
-                const float dot = glm::dot(shape->get_vertex(i)->get_position(), direction);
+                const float dot = glm::dot(shape->get_vertex(i)->get_position(), rotated_direction);
                 if (dot > max_dot) {
                     max_dot = dot;
                     max_index = i;

@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -13,6 +14,55 @@
  */
 
 namespace cdlib {
+    struct Simplex {
+    private:
+        std::array<glm::vec3, 4> _points;
+        size_t _size;
+
+    public:
+        Simplex() : _points({}), _size(0) {}
+
+        explicit Simplex(const std::vector<glm::vec3>& points) : _points({}) {
+            for (const auto& point : points) {
+                insert(point);
+            }
+            _size = std::min(points.size(), static_cast<size_t>(4));
+        }
+
+        [[nodiscard]] size_t size() const {
+            return _size;
+        }
+
+        [[nodiscard]] const glm::vec3& operator[](const size_t index) const {
+            return _points[index];
+        }
+
+        void insert(const glm::vec3& point) {
+            _points = {point, _points[0], _points[1], _points[2]};
+            _size = std::min(_size + 1, static_cast<size_t>(4));
+        }
+
+        Simplex& operator=(std::initializer_list<glm::vec3> list){
+            for (const auto& point : list){
+                insert(point);
+            }
+            return *this;
+        }
+
+        [[nodiscard]] auto begin() const {
+            return _points.begin();
+        }
+
+        [[nodiscard]] auto end() const {
+            return _points.begin() + static_cast<int>(_size);
+        }
+
+        void clear() {
+            _size = 0;
+            _points = {};
+        }
+    };
+
     struct Plane {
         glm::vec3 normal;
         float d;

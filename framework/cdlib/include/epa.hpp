@@ -12,7 +12,7 @@ namespace cdlib {
 
     class EPA {
     protected:
-        std::vector<glm::vec3> simplex;
+        Simplex simplex;
         std::shared_ptr<Collider> collider_1{};
         std::shared_ptr<Collider> collider_2{};
 
@@ -22,9 +22,9 @@ namespace cdlib {
     public:
         EPA() = default;
 
-        EPA(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2, const std::vector<glm::vec3>& simplex)
+        EPA(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2, const Simplex& simplex)
             : simplex(simplex), collider_1(std::move(collider_1)), collider_2(std::move(collider_2)) {
-            polytope = simplex;
+            polytope = std::vector(simplex.begin(), simplex.end());
             faces = {
                 {0, 1, 2},
                 {0, 3, 1},
@@ -38,7 +38,7 @@ namespace cdlib {
         EPA(const EPA& other) = default;
 
         EPA(EPA&& other) noexcept
-            : simplex(std::move(other.simplex)),
+            : simplex(other.simplex),
               collider_1(std::move(other.collider_1)),
               collider_2(std::move(other.collider_2)),
               polytope(std::move(other.polytope)),
@@ -59,16 +59,12 @@ namespace cdlib {
         EPA& operator=(EPA&& other) noexcept {
             if (this == &other)
                 return *this;
-            simplex = std::move(other.simplex);
+            simplex = other.simplex;
             collider_1 = other.collider_1;
             collider_2 = other.collider_2;
             polytope = std::move(other.polytope);
             faces = std::move(other.faces);
             return *this;
-        }
-
-        void set_simplex(const std::vector<glm::vec3>& simplex) {
-            EPA::simplex = simplex;
         }
 
         [[nodiscard]] virtual CollisionData get_collision_data();

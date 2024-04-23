@@ -275,7 +275,7 @@ namespace cdlib
         if (!clip_data.is_clipped) {
             const auto neighbour = clip_data.neighbour_l != nullptr ? clip_data.neighbour_l : clip_data.neighbour_h;
             if (neighbour == nullptr){
-                std::cerr << "Huhh?" << std::endl;
+                std::cerr << "VClip: Degenerate case" << std::endl;
                 return ERROR;
             }
             const auto closest_feature = closest_face_vertex_to_edge(edge, face);
@@ -294,7 +294,7 @@ namespace cdlib
 
         const auto derivative = distance_derivative_sign(clip_data.point_l, edge, face);
         if (!derivative.has_value()){
-            std::cerr << "Degenerate case" << std::endl;
+            std::cerr << "VClip: Degenerate case" << std::endl;
             return ERROR;
         }
         if (derivative.value() >= 0){
@@ -317,7 +317,7 @@ namespace cdlib
     VClipState VClip::initialize() {
         // Check if the colliders are valid
         if (!collider_1->is_valid() && !collider_2->is_valid()){
-            std::cerr << "Invalid colliders" << std::endl;
+            std::cerr << "VClip: Invalid colliders" << std::endl;
             return ERROR;
         }
 
@@ -481,7 +481,7 @@ namespace cdlib
     {
         // Check if the colliders are valid
         if (!collider_1->is_valid() && !collider_2->is_valid()){
-            std::cerr << "Invalid colliders" << std::endl;
+            std::cerr << "VClip: Invalid colliders" << std::endl;
             return ERROR;
         }
 
@@ -561,7 +561,7 @@ namespace cdlib
         if (!clip_data.is_clipped) {
             const auto neighbour = clip_data.neighbour_l != nullptr ? clip_data.neighbour_l : clip_data.neighbour_h;
             if (neighbour == nullptr){
-                std::cerr << "Huhh?" << std::endl;
+                std::cerr << "VClip: Degenerate case" << std::endl;
                 return ERROR;
             }
             const auto closest_feature = closest_face_vertex_to_edge(edge, face);
@@ -580,7 +580,7 @@ namespace cdlib
 
         const auto derivative = distance_derivative_sign(clip_data.point_l, edge, face);
         if (!derivative.has_value()){
-            std::cerr << "Degenerate case" << std::endl;
+            std::cerr << "VClip: Degenerate case" << std::endl;
             return ERROR;
         }
         if (derivative.value() >= 0){
