@@ -1,4 +1,5 @@
 #pragma once
+#include "bruteforce.hpp"
 #include "camera_ubo.hpp"
 #include "light_ubo.hpp"
 #include "pv227_application.hpp"
@@ -17,7 +18,8 @@ enum CollisionDetectionMethod {
     GJK_EPA = 0,
     V_CLIP = 1,
     AABBTREE = 2,
-    SAP = 3
+    SAP = 3,
+    BRUTE_FORCE = 4
 };
 
 struct ConvexObject {
@@ -114,19 +116,23 @@ protected:
     glm::vec3 ray_origin;
     glm::vec3 ray_direction;
 
+    // Bruteforce
+    bool brute_force_test = false;
+    bool shoot_random_rays = false;
+    cdlib::Bruteforce brute_force;
+
+    // Collision results
+    cdlib::CollisionData collision_data;
+
     // GJK Specific
-    cdlib::SteppableGJK2 gjk;
-
+    cdlib::SteppableGJK2EPA gjk;
     std::shared_ptr<ConvexObject> minkowski_object;
-
     bool show_minkowski_difference = false;
 
     // V-Clip Specific
     cdlib::VClip vclip;
     cdlib::FeatureP highlighted_feature_1;
     cdlib::FeatureP highlighted_feature_2;
-
-    bool brute_force_test = false;
 
     // AABBTREE Specific
 
@@ -151,14 +157,18 @@ public:
 
     void create_vertex_highlight_objects();
     void create_feature_highlights(const cdlib::FeatureP& feature);
-    void clear_feature_highlights();
     void draw_direction_highlights();
+
+    void perform_collision_detection();
+    void start_step_by_step_collision_detection();
+    void step_collision_detection();
+    void stop_step_by_step_collision_detection();
+    void gjk_step_visualize(cdlib::GJK2State state);
 
     static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& from, const glm::vec3& to);
     static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& origin, const glm::vec3& direction, float length);
 
     static std::vector<std::array<float, 3>> random_points(int seed);
-    // std::pair<Geometry, std::vector<float>> random_convex_geometry(const std::vector<std::array<float, 3>>& points);
     static std::tuple<std::shared_ptr<Geometry>, std::vector<float>, std::vector<uint32_t>> generate_convex_hull_geometry(const std::vector<glm::vec3>& points);
     static std::tuple<std::shared_ptr<Geometry>, std::vector<float>, std::vector<uint32_t>> generate_convex_hull_geometry(const std::vector<std::array<float, 3>>& points);
 
@@ -188,8 +198,6 @@ public:
     void update(float delta) override;
 
     void update_object_positions();
-
-    void gjk_step_visualize(cdlib::GJK2State state);
 
     // ----------------------------------------------------------------------------
     // Render

@@ -13,6 +13,7 @@ namespace cdlib {
     enum class GJK2State {
         INIT,
         CONTINUE,
+        UPDATE_SIMPLEX,
         COLLISION,
         NO_COLLISION,
         EPA_FINISHED,
@@ -65,7 +66,7 @@ namespace cdlib {
             return simplex;
         }
 
-        virtual void set_simplex_indices(std::initializer_list<long long> indices);
+        virtual void set_simplex_indices(std::initializer_list<size_t> indices);
         virtual void insert_simplex_point(const glm::vec3& point);
 
         // States
@@ -106,9 +107,9 @@ namespace cdlib {
 
     class SteppableGJK2 : public GJK2 {
     protected:
-        glm::vec3 current_point_a = glm::vec3(0.f);
-        glm::vec3 current_point_b = glm::vec3(0.f);
-        glm::vec3 current_new_point = glm::vec3(0.f);
+        glm::vec3 current_point_a = glm::vec3(std::numeric_limits<float>::infinity());
+        glm::vec3 current_point_b = glm::vec3(std::numeric_limits<float>::infinity());
+        glm::vec3 current_new_point = glm::vec3(std::numeric_limits<float>::infinity());
 
         Simplex simplex_obj_1;
         Simplex simplex_obj_2;
@@ -134,12 +135,14 @@ namespace cdlib {
         [[nodiscard]] virtual GJK2State get_current_state() const { return state; }
         [[nodiscard]] virtual CollisionData get_result() const { return result; }
 
-        void set_simplex_indices(std::initializer_list<long long> indices) override;
+        void set_simplex_indices(std::initializer_list<size_t> indices) override;
         void insert_simplex_point(const glm::vec3& point) override;
 
         void reset() override;
 
         [[nodiscard]] GJK2State step() override;
+        [[nodiscard]] GJK2State get_next_point();
+        [[nodiscard]] GJK2State get_next_simplex();
 
         [[nodiscard]] GJK2State initialize() override;
         [[nodiscard]] GJK2State execute_iteration() override;

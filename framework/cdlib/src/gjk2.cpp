@@ -21,7 +21,7 @@ namespace cdlib
         }
 
         // Get an arbitrary direction
-        direction = normalize(collider_1->get_global_vertex(0) - collider_2->get_global_vertex(0));
+        direction = glm::vec3(1.0f, 0.0f, 0.0f);
         auto support_point = get_support_point(direction);
 
         // Insert the support point into the simplex and look in the direction of the origin
@@ -47,8 +47,8 @@ namespace cdlib
 
     GJK2State GJK2::step()
     {
-        if (state != GJK2State::INIT && state != GJK2State::CONTINUE){
-            return state;
+        if (state == GJK2State::ERROR){
+            return GJK2State::ERROR;
         }
         if (state == GJK2State::INIT){
             return initialize();
@@ -70,11 +70,11 @@ namespace cdlib
     CollisionData GJK2::get_collision_data()
     {
         auto iteration = 0;
-        while (state == GJK2State::CONTINUE || state == GJK2State::INIT){
+        while (state == GJK2State::CONTINUE || state == GJK2State::UPDATE_SIMPLEX || state == GJK2State::INIT){
             state = step();
             if (iteration++ > 10000){
                 std::cerr << "GJK: Iteration limit reached" << std::endl;
-                break;
+                return {false};
             }
         }
         return calculate_collision_data();
@@ -82,16 +82,13 @@ namespace cdlib
 
     bool GJK2::passed_origin(const glm::vec3& support) const
     {
-        return dot(support, direction) > 0;
+        const auto asdf = dot(support, direction);
+        return asdf >= 0;
     }
 
-    void GJK2::set_simplex_indices(std::initializer_list<long long> indices)
+    void GJK2::set_simplex_indices(const std::initializer_list<size_t> indices)
     {
-        const auto old_simplex = simplex;
-        simplex.clear();
-        for (const auto index : indices){
-            simplex.insert(old_simplex[index]);
-        }
+        simplex.reorder(indices);
     }
 
     void GJK2::insert_simplex_point(const glm::vec3& point)
@@ -120,15 +117,12 @@ namespace cdlib
         const auto ao = -simplex[0];
 
         // If the origin lies in a region between the two points (i.e. is closest to the line segment, not to the points)
-        if (dot(ab, ao) > 0)
-        {
+        if (dot(ab, ao) > 0) {
             direction = cross(cross(ab, ao), ab);
         }
 
         // If the origin is closest to the first point
-        else
-        {
-            // simplex = {simplex[0]};
+        else {
             set_simplex_indices({0});
             direction = ao;
         }
@@ -138,51 +132,50 @@ namespace cdlib
 
     GJK2State GJK2::update_triangle_simplex()
     {
+        // Check the "projected" origin against the voronoi regions of a triangle
+        // Since the newest point added was A, then origin cannot lie in direction of the BC edge.
+        // The point can then either:
+        // - Lie in the line voronoi region of AB or AC
+        // - Lie in the vertex voronoi region of A
+        // - Lie inside the triangle -> the point is above or below the triangle
+
+        // Calculate the normal plane of the triangle
         const auto ab = simplex[1] - simplex[0];
         const auto ac = simplex[2] - simplex[0];
         const auto ao = -simplex[0];
-        const auto n = cross(ab, ac);  // Normal of the triangle
+        const auto n = normalize(cross(ab, ac));
 
-        // If the origin lies in the region closest to the line segment ac
-        if (dot(cross(ac, n), ao) > 0)
-        {
-            // The origin is "above" the line segment ac
-            if (dot(ac, ao) > 0)
-            {
-                //simplex = {simplex[0], simplex[2]};
+        // Check the voronoi region of AC or A
+        const auto acn = cross(n, ac);
+        if (dot(acn, ao) > 0) {
+            // Check the voronoi region of AC
+            if (dot(ac, ao) > 0) {
                 set_simplex_indices({0, 2});
-                direction = cross(cross(ac, ao), ac);
+                direction = cross(cross(ac, ao), ac); // Recalculate the normal of the line, pointing towards the origin
+                return GJK2State::CONTINUE;
             }
-            // The origin is "below" the line segment ac -> check line segment ab
-            else
-            {
-                //simplex = {simplex[0], simplex[1]};
-                set_simplex_indices({0, 1});
-                return update_line_simplex();
-            }
+            // Otherwise we are in the vertex region of A -> return the line case for AB
+            set_simplex_indices({0, 1});
+            return update_line_simplex();
         }
-        // Otherwise, the origin must either lie near AB or above or below the triangle
-        else
-        {
-            if (dot(cross(ab, n), ao) > 0)
-            {
-                //simplex = {simplex[0], simplex[1]};
-                set_simplex_indices({0, 1});
-                return update_line_simplex();
-            }
 
-            // The origin is above or below the triangle
-            if (dot(n, ao) > 0)
-            {
-                direction = n;
-            }
-            else
-            {
-                //simplex = {simplex[0], simplex[2], simplex[1]};
-                set_simplex_indices({0, 2, 1});
-                direction = -n;
-            }
+        // Check the voronoi region of AB
+        const auto abn = cross(ab, n);
+        if (dot(abn, ao) > 0) {
+            set_simplex_indices({0, 1});
+            direction = cross(cross(ab, ao), ab); // Recalculate the normal of the line, pointing towards the origin
+            return GJK2State::CONTINUE;
         }
+
+        // If both fail, we are inside the triangle -> Check if origin is above or below
+        if (dot(n, ao) > 0) {
+            direction = n;
+        }
+        else {
+            set_simplex_indices({0, 2, 1});
+            direction = -n;
+        }
+
         return GJK2State::CONTINUE;
     }
 
@@ -198,21 +191,15 @@ namespace cdlib
         const auto adb = cross(ad, ab);
 
         // Check each face of the tetrahedron (apart from bcd, since a is closer to the origin than b, c, and d)
-        if (dot(abc, ao) > 0)
-        {
-            // simplex = {simplex[0], simplex[1], simplex[2]};
+        if (dot(abc, ao) > 0) {
             set_simplex_indices({0, 1, 2});
             return update_triangle_simplex();
         }
-        if (dot(acd, ao) > 0)
-        {
-            // simplex = {simplex[0], simplex[2], simplex[3]};
+        if (dot(acd, ao) > 0) {
             set_simplex_indices({0, 2, 3});
             return update_triangle_simplex();
         }
-        if (dot(adb, ao) > 0)
-        {
-            // simplex = {simplex[0], simplex[3], simplex[1]};
+        if (dot(adb, ao) > 0) {
             set_simplex_indices({0, 3, 1});
             return update_triangle_simplex();
         }
@@ -256,12 +243,16 @@ namespace cdlib
         if (next_state == GJK2State::NO_COLLISION)
         {
             result = CollisionData{ false };
+            state = GJK2State::NO_COLLISION;
             return GJK2State::NO_COLLISION;
         }
         if (state == GJK2State::COLLISION){
             result = CollisionData{ true };
+            state = GJK2State::COLLISION;
             return GJK2State::COLLISION;
         }
+
+        state = next_state;
         return next_state;
     }
 
@@ -278,40 +269,47 @@ namespace cdlib
         return GJK2State::CONTINUE;
     }
 
-    GJK2State SteppableGJK2::execute_iteration()
-    {
-        // Get a new support point
+    GJK2State SteppableGJK2::get_next_point() {
         const auto support_point = get_support_point(direction);
 
         current_new_point = support_point;
         current_point_a = collider_1->support(direction);
         current_point_b = collider_2->support(-direction);
 
-        if(!passed_origin(support_point))
+        return GJK2State::UPDATE_SIMPLEX;
+    }
+
+    GJK2State SteppableGJK2::get_next_simplex() {
+        if(!passed_origin(current_new_point))
         {
             return GJK2State::NO_COLLISION;
         }
 
-        insert_simplex_point(support_point);
+        insert_simplex_point(current_new_point);
 
-        return update_simplex();
+        const auto next_state = update_simplex();
+        current_new_point = glm::vec3(std::numeric_limits<float>::infinity());
+        current_point_a = glm::vec3(std::numeric_limits<float>::infinity());
+        current_point_b = glm::vec3(std::numeric_limits<float>::infinity());
+        return next_state;
     }
 
-    void SteppableGJK2::set_simplex_indices(std::initializer_list<long long> indices)
+    GJK2State SteppableGJK2::execute_iteration()
     {
-        const auto old_simplex = simplex;
-        const auto old_simplex_obj_1 = simplex_obj_1;
-        const auto old_simplex_obj_2 = simplex_obj_2;
-
-        simplex.clear();
-        simplex_obj_1.clear();
-        simplex_obj_2.clear();
-
-        for (const auto index : indices){
-            simplex.insert(old_simplex[index]);
-            simplex_obj_1.insert(old_simplex_obj_1[index]);
-            simplex_obj_2.insert(old_simplex_obj_2[index]);
+        if (state == GJK2State::CONTINUE){
+            return get_next_point();
         }
+        if (state == GJK2State::UPDATE_SIMPLEX){
+            return get_next_simplex();
+        }
+        return GJK2State::ERROR;
+    }
+
+    void SteppableGJK2::set_simplex_indices(const std::initializer_list<size_t> indices)
+    {
+        GJK2::set_simplex_indices(indices);
+        simplex_obj_1.reorder(indices);
+        simplex_obj_2.reorder(indices);
     }
 
     void SteppableGJK2::insert_simplex_point(const glm::vec3& point)
@@ -342,6 +340,7 @@ namespace cdlib
     {
         if (state == GJK2State::COLLISION){
             result = get_epa_data();
+            state = GJK2State::EPA_FINISHED;
             return GJK2State::EPA_FINISHED;
         }
         return SteppableGJK2::step();

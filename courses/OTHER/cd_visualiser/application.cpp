@@ -64,7 +64,7 @@ void Application::prepare_scene() {
 }
 
 void Application::prepare_collision_detectors() {
-    gjk = cdlib::SteppableGJK2(object_1->collider, object_2->collider);
+    gjk = cdlib::SteppableGJK2EPA(object_1->collider, object_2->collider);
     recalculate_minkowski_difference();
 
     vclip = cdlib::VClip(object_1->collider, object_2->collider);
@@ -240,16 +240,6 @@ void Application::recalculate_minkowski_difference() {
     auto om = ConvexObject{ std::move(vm), mm, nullptr, sm };
 
     minkowski_object = std::make_shared<ConvexObject>(std::move(om));
-
-    // Print the vertices (as "Minkowski: [(x, y, z), ...]") without the float f suffix
-    std::cout << "Minkowski: [";
-    for (size_t i = 0; i < pm.size(); i++) {
-        std::cout << "(" << pm[i].x << ", " << pm[i].y << ", " << pm[i].z << ")";
-        if (i < pm.size() - 1) {
-            std::cout << ", ";
-        }
-    }
-    std::cout << "]" << std::endl;
 }
 
 std::vector<std::array<float, 3>> Application::random_points(int seed) {
@@ -449,6 +439,16 @@ void Application::create_vertex_highlight_objects() {
     active_object_vertex_highlights.push_back(create_new_vertex_highlight_object(current_point_b, blue_material_ubo));
     active_simplex_vertex_highlights.push_back(create_new_vertex_highlight_object(current_new_point, magenta_material_ubo));
 
+    const auto mats = std::vector{
+        red_material_ubo,
+        green_material_ubo,
+        blue_material_ubo,
+        yellow_material_ubo,
+        cyan_material_ubo,
+        magenta_material_ubo,
+        white_material_ubo
+    };
+
     // Create highlights for simplex vertices
     for (const auto& vertex : simplex_1) {
         object_vertex_highlights.push_back(create_new_vertex_highlight_object(vertex, yellow_material_ubo));
@@ -456,8 +456,12 @@ void Application::create_vertex_highlight_objects() {
     for (const auto& vertex : simplex_2) {
         object_vertex_highlights.push_back(create_new_vertex_highlight_object(vertex, yellow_material_ubo));
     }
-    for (const auto& vertex : simplex_minkowski) {
-        simplex_vertex_highlights.push_back(create_new_vertex_highlight_object(vertex, white_material_ubo));
+    // for (const auto& vertex : simplex_minkowski) {
+    //     simplex_vertex_highlights.push_back(create_new_vertex_highlight_object(vertex, white_material_ubo));
+    // }
+
+    for (size_t i = 0; i < gjk.get_simplex().size(); i++) {
+        simplex_vertex_highlights.push_back(create_new_vertex_highlight_object(gjk.get_simplex()[i], mats[i % mats.size()]));
     }
 }
 
@@ -467,10 +471,6 @@ void Application::draw_direction_highlights() {
         auto geometry = create_line_geometry(origin, direction, 1.0f);
         direction_highlight_objects.emplace_back(geometry, ModelUBO(glm::mat4(1.0f)), cyan_material_ubo);
     }
-}
-
-void Application::clear_feature_highlights() {
-    feature_highlights.clear();
 }
 
 void Application::create_feature_highlights(const cdlib::FeatureP& feature)
@@ -713,6 +713,88 @@ void Application::raycast()
     std::cout << "Raycast hits: " << hits.size() << std::endl;
 }
 
+// ----------------------------------------------------------------------------
+// Collision detection
+// ----------------------------------------------------------------------------
+
+void Application::perform_collision_detection() {
+    if (selected_method == GJK_EPA) {
+        gjk.reset();
+
+        collision_data = gjk.get_collision_data();
+        auto [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
+        std::cout << "Collision: " << is_colliding << std::endl;
+        if (is_colliding) {
+            std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+            std::cout << " - Depth: " << depth << std::endl;
+
+            // Draw the collision normal from origin
+            direction_highlights.emplace_back(normal * depth, glm::vec3(0.0f));
+        }
+    } else if (selected_method == V_CLIP) {
+        vclip.reset();
+
+        collision_data = vclip.get_collision_data();
+        const auto [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
+
+        std::cout << "Collision: " << is_colliding << std::endl;
+        std::cout << " - Distance: " << depth << std::endl;
+        std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+        std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
+        std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
+
+        if (brute_force_test) {
+            auto bruteforce_result = vclip.debug_brute_force(is_colliding, feature_1, feature_2);
+            if (!bruteforce_result) {
+                std::cerr << "V-Clip bruteforce test failed for: dist=" << object_distance << " rot=" << object_rotation_pos << std::endl;
+            }
+        }
+
+        feature_highlights.clear();
+        highlighted_feature_1 = feature_1;
+        highlighted_feature_2 = feature_2;
+        create_feature_highlights(feature_1);
+        create_feature_highlights(feature_2);
+    }
+}
+
+void Application::start_step_by_step_collision_detection() {
+    step_by_step = true;
+    gjk.reset();
+    vclip.reset();
+}
+
+void Application::step_collision_detection() {
+    if (!step_by_step) return;
+
+    if (selected_method == GJK_EPA) {
+        gjk_step_visualize(gjk.step());
+    } else if (selected_method == V_CLIP) {
+        const auto step_result = vclip.step();
+        if (step_result == cdlib::DONE || step_result == cdlib::PENETRATION) {
+            step_by_step = false;
+        }
+        const auto current_feature_1 = vclip.primary_feature();
+        const auto current_feature_2 = vclip.secondary_feature();
+        feature_highlights.clear();
+        highlighted_feature_1 = current_feature_1;
+        highlighted_feature_2 = current_feature_2;
+        create_feature_highlights(current_feature_1);
+        create_feature_highlights(current_feature_2);
+    }
+}
+
+void Application::stop_step_by_step_collision_detection() {
+    step_by_step = false;
+
+    // Clear the highlights
+    active_simplex_vertex_highlights.clear();
+    simplex_vertex_highlights.clear();
+    active_object_vertex_highlights.clear();
+    object_vertex_highlights.clear();
+    direction_highlights.clear();
+    feature_highlights.clear();
+}
 
 // ----------------------------------------------------------------------------
 // GUI
@@ -764,6 +846,8 @@ void Application::render_ui() {
     ImGui::Checkbox("Move object around", &rotate_and_move_objects);
     if (!rotate_and_move_objects) {
         ImGui::Checkbox("Detailed positioning", &detailed_positioning);
+    } else {
+        detailed_positioning = false;
     }
 
     if (!rotate_and_move_objects && !detailed_positioning)
@@ -797,8 +881,12 @@ void Application::render_ui() {
     ImGui::Spacing();
 
     ImGui::Checkbox("Show extra objects", &show_extra_objects);
-    ImGui::InputInt("Extra object seed", &extra_object_seed);
-    ImGui::SliderInt("Extra object count", &extra_object_count, 0, 100);
+    if (show_extra_objects) {
+        ImGui::Indent(20.f);
+        ImGui::InputInt("Extra object seed", &extra_object_seed);
+        ImGui::SliderInt("Extra object count", &extra_object_count, 0, 100);
+        ImGui::Unindent(20.f);
+    }
 
     ImGui::Spacing();
 
@@ -813,158 +901,63 @@ void Application::render_ui() {
 
     ImGui::Spacing();
 
+    ImGui::Checkbox("Bruteforce test", &brute_force_test);
+    if (brute_force_test) {
+        ImGui::Indent(20.f);
+        ImGui::Checkbox("Shoot random rays", &shoot_random_rays);
+        ImGui::Unindent(20.f);
+    }
+
+    ImGui::Spacing();
+
     ImGui::Checkbox("Auto-calculate collision", &auto_calculate_collision);
 
     if (selected_method == GJK_EPA) {
         ImGui::Checkbox("Show minkowski difference", &show_minkowski_difference);
-
-        if (!auto_calculate_collision) {
-            // Button for manual collision calculation
-            if (ImGui::Button("Calculate collision")) {
-                gjk.reset();
-                // auto result = gjk.is_colliding();
-                // std::cout << "Collision: " << result << std::endl;
-                auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
-                std::cout << "Collision: " << is_colliding << std::endl;
-                if (is_colliding) {
-                    std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
-                    std::cout << " - Depth: " << depth << std::endl;
-
-                    // Draw the collision normal from origin
-                    direction_highlights.emplace_back(normal * depth, glm::vec3(0.0f));
-                }
-            }
-
-            // Test iterate buttons that iterate over the vertices of the convex objects
-            ImGui::Text("Iterate over vertices:");
-            ImGui::Indent(10.0f);
-            if (!step_by_step) {
-                if (ImGui::Button("Start step-by-step")) {
-                    step_by_step = true;
-                    gjk.reset();
-                }
-            } else {
-                // ImGui::Text("Current vertex: %d / %d", current_vertex, max_vertex);
-                if (ImGui::Button("Next step")) {
-                    gjk_step_visualize(gjk.step());
-                }
-                if (ImGui::Button("Cancel step-by-step")) {
-                    step_by_step = false;
-                    // Clear the highlights
-                    active_simplex_vertex_highlights.clear();
-                    simplex_vertex_highlights.clear();
-                    active_object_vertex_highlights.clear();
-                    object_vertex_highlights.clear();
-                    direction_highlights.clear();
-                }
-            }
-        }
-        else {
-            direction_highlights.clear();
-            direction_highlight_objects.clear();
-            gjk.reset();
-            auto [is_colliding, normal, depth, feature_1, feature_2] = gjk.get_collision_data();
-
-            if (is_colliding) {
-                ImGui::Text("The objects are: colliding");
-
-                ImGui::Text("Collision normal: %f %f %f", normal.x, normal.y, normal.z);
-                ImGui::Text("Collision depth: %f", depth);
-
-                // Draw the collision normal from origin
-                direction_highlights.emplace_back(normal * depth, glm::vec3(0.0f));
-                draw_direction_highlights();
-            } else {
-                ImGui::Text("The objects are: not colliding");
-            }
-        }
     }
     else if (selected_method == V_CLIP) {
-        ImGui::Checkbox("Bruteforce test", &brute_force_test);
 
-        if (!auto_calculate_collision) {
-            // Button for manual collision calculation
-            if (ImGui::Button("Calculate collision")) {
-                vclip.reset();
-                const auto [is_colliding, normal, depth, feature_1, feature_2] = vclip.get_collision_data();
-
-                std::cout << "Collision: " << is_colliding << std::endl;
-                std::cout << " - Distance: " << depth << std::endl;
-                std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
-                std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
-                std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
-
-                if (brute_force_test) {
-                    auto bruteforce_result = vclip.debug_brute_force(is_colliding, feature_1, feature_2);
-                    if (!bruteforce_result) {
-                        std::cerr << "Bruteforce test failed for: dist=" << object_distance << " rot=" << object_rotation_pos << std::endl;
-                    }
-                }
-
-                clear_feature_highlights();
-                highlighted_feature_1 = feature_1;
-                highlighted_feature_2 = feature_2;
-                create_feature_highlights(feature_1);
-                create_feature_highlights(feature_2);
-            }
-
-            ImGui::Text("Iterate over features:");
-            ImGui::Indent(10.0f);
-            if (!step_by_step) {
-                if (ImGui::Button("Start step-by-step")) {
-                    step_by_step = true;
-                    vclip.reset();
-                }
-            } else {
-                if (ImGui::Button("Next step")) {
-                    const auto step_result = vclip.step();
-                    if (step_result == cdlib::DONE || step_result == cdlib::PENETRATION) {
-                        step_by_step = false;
-                    }
-                    const auto current_feature_1 = vclip.primary_feature();
-                    const auto current_feature_2 = vclip.secondary_feature();
-                    clear_feature_highlights();
-                    highlighted_feature_1 = current_feature_1;
-                    highlighted_feature_2 = current_feature_2;
-                    create_feature_highlights(current_feature_1);
-                    create_feature_highlights(current_feature_2);
-                }
-                if (ImGui::Button("Cancel step-by-step")) {
-                    step_by_step = false;
-                    clear_feature_highlights();
-                }
-            }
-        }
-        else {
-            vclip.reset();
-            auto [is_colliding, normal, depth, feature_1, feature_2] = vclip.get_collision_data();
-            ImGui::Text("The objects are: %s", is_colliding ? "colliding" : "not colliding");
-            ImGui::Text("Distance: %f", depth);
-
-            if (brute_force_test) {
-                auto bruteforce_result = vclip.debug_brute_force(is_colliding, feature_1, feature_2);
-                if (!bruteforce_result) {
-                    std::cerr << "Bruteforce test failed for: dist=" << object_distance << " rot=" << object_rotation_pos << std::endl;
-                }
-            }
-
-            clear_feature_highlights();
-            highlighted_feature_1 = feature_1;
-            highlighted_feature_2 = feature_2;
-            create_feature_highlights(feature_1);
-            create_feature_highlights(feature_2);
-        }
     }
     else if (selected_method == AABBTREE) {
 
     }
     else if (selected_method == SAP) {
+
+    }
+
+    if (!auto_calculate_collision) {
+        // Button for manual collision calculation
         if (ImGui::Button("Calculate collision")) {
-            auto collisions = sap.get_collisions();
-            std::cout << "Collisions: " << collisions.size() << std::endl;
-            for (const auto& pair : sap.get_collisions()) {
-                std::cout << " - Colliding pair: " << pair.first << " " << pair.second << std::endl;
+            perform_collision_detection();
+        }
+
+        ImGui::Text("Step by step:");
+        ImGui::Indent(20.f);
+        if (!step_by_step) {
+            if (ImGui::Button("Start step-by-step")) {
+                start_step_by_step_collision_detection();
             }
+        } else {
+            if (ImGui::Button("Next step")) {
+                step_collision_detection();
+            }
+            if (ImGui::Button("Cancel step-by-step")) {
+                stop_step_by_step_collision_detection();
+            }
+        }
+        ImGui::Unindent(20.f);
+    }
+    else {
+        perform_collision_detection();
+        ImGui::Text("The objects are: %s", collision_data.is_colliding ? "colliding" : "not colliding");
+        if (collision_data.is_colliding) {
+            ImGui::Text("Collision normal: %f %f %f", collision_data.normal.x, collision_data.normal.y, collision_data.normal.z);
+            ImGui::Text("Collision depth: %f", collision_data.depth);
+        }
+
+        if (collision_data.normal != glm::vec3(0.0f)) {
+            direction_highlights.emplace_back(collision_data.normal * collision_data.depth, glm::vec3(0.0f));
+            draw_direction_highlights();
         }
     }
 
@@ -991,17 +984,20 @@ void Application::gjk_step_visualize(cdlib::GJK2State state){
         else {
             std::cout << " - No collision data" << std::endl;
         }
+        step_by_step = false;
     }
     else if (state == cdlib::GJK2State::COLLISION)
     {
-        std::cout << "Collision detected" << std::endl;
+        std::cout << "Collision detected -> Moving onto EPA" << std::endl;
     }
     else if (state == cdlib::GJK2State::NO_COLLISION)
     {
         std::cout << "No collision detected" << std::endl;
+        step_by_step = false;
     }
-    else if (state == cdlib::GJK2State::CONTINUE || state ==cdlib::GJK2State::INIT)
+    else if (state == cdlib::GJK2State::CONTINUE || state == cdlib::GJK2State::INIT)
     {
+        direction_highlights.clear();
         std::cout << "Iteration step" << std::endl;
         std::cout << " - New direction: " << gjk.get_direction().x << " " << gjk.get_direction().y << " " << gjk.get_direction().z << std::endl;
         std::cout << " - New simplex:" << std::endl;
@@ -1016,6 +1012,9 @@ void Application::gjk_step_visualize(cdlib::GJK2State state){
         average /= static_cast<float>(gjk.get_simplex().size());
         // Create a new direction from the average to the origin
         direction_highlights.emplace_back(gjk.get_direction(), average);
+    }
+    else if (state == cdlib::GJK2State::UPDATE_SIMPLEX) {
+        std::cout << "Next support point: " << gjk.get_current_new_point().x << " " << gjk.get_current_new_point().y << " " << gjk.get_current_new_point().z << std::endl;
     }
     draw_direction_highlights();
 }

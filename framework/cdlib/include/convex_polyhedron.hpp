@@ -42,6 +42,20 @@ namespace cdlib {
             _size = std::min(_size + 1, static_cast<size_t>(4));
         }
 
+        void reorder(const std::initializer_list<size_t> indices) {
+            std::array<glm::vec3, 4> newPoints {};
+            size_t newSize = 0;
+
+            for (const auto index : indices) {
+                if (index < _size) {
+                    newPoints[newSize++] = _points[index];
+                }
+            }
+
+            _points = newPoints;
+            _size = newSize;
+        }
+
         Simplex& operator=(std::initializer_list<glm::vec3> list){
             for (const auto& point : list){
                 insert(point);
