@@ -205,9 +205,12 @@ void Application::random_move_objects() {
 
         convex_objects[i]->set_model_matrix(m);
 
-        // If the object is the first one and second one print the position and rotation
-        if (i == 0 || i == 1) {
-            std::cout << "Object " << i + 1 << " position: " << random.x << ", " << random.y << ", " << random.z << "   rotation: " << rotation.x << ", " << rotation.y << ", " << rotation.z << std::endl;
+        if (i == 0) {
+            object_position_1 = random;
+            object_rotation_1 = rotation;
+        } else if (i == 1) {
+            object_position_2 = random;
+            object_rotation_2 = rotation;
         }
     }
 }
@@ -719,14 +722,24 @@ void Application::raycast()
 
 void Application::perform_collision_detection() {
     if (selected_method == GJK_EPA) {
+        direction_highlights.clear();
+        direction_highlight_objects.clear();
         gjk.reset();
 
+        // Measure time for collision detection
+        auto start = std::chrono::high_resolution_clock::now();
         collision_data = gjk.get_collision_data();
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        std::cout << "GJK+EPA took: " << duration.count() << " microseconds" << std::endl;
+
         auto [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
-        std::cout << "Collision: " << is_colliding << std::endl;
+        if (!auto_calculate_collision) std::cout << "Collision: " << is_colliding << std::endl;
         if (is_colliding) {
-            std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
-            std::cout << " - Depth: " << depth << std::endl;
+            if (!auto_calculate_collision) {
+                std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+                std::cout << " - Depth: " << depth << std::endl;
+            }
 
             // Draw the collision normal from origin
             direction_highlights.emplace_back(normal * depth, glm::vec3(0.0f));
@@ -734,14 +747,21 @@ void Application::perform_collision_detection() {
     } else if (selected_method == V_CLIP) {
         vclip.reset();
 
+        auto start = std::chrono::high_resolution_clock::now();
         collision_data = vclip.get_collision_data();
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        std::cout << "V-Clip took: " << duration.count() << " microseconds" << std::endl;
+
         const auto [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
 
-        std::cout << "Collision: " << is_colliding << std::endl;
-        std::cout << " - Distance: " << depth << std::endl;
-        std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
-        std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
-        std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
+        if (!auto_calculate_collision) {
+            std::cout << "Collision: " << is_colliding << std::endl;
+            std::cout << " - Distance: " << depth << std::endl;
+            std::cout << " - Normal: " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+            std::cout << " - Closest feature on object 1: " << feature_1 << std::endl;
+            std::cout << " - Closest feature on object 2: " << feature_2 << std::endl;
+        }
 
         if (brute_force_test) {
             auto bruteforce_result = vclip.debug_brute_force(is_colliding, feature_1, feature_2);
@@ -815,10 +835,7 @@ void Application::render_ui() {
     ImGui::Text(fps_string.append(std::to_string(fps_gpu)).c_str());
 
     // Dropdown for selecting the collision method
-    // const char* methods[2] = {"GJK+EPA", "V-Clip"};
-    // Convert CollisionDetectionMethod enum to const char*
     const char* methods[4] = {"GJK+EPA", "V-Clip", "AABBTree", "Sweep-and-Prune"};
-    // Treat &selected_method as int
     if (ImGui::Combo("Collision method", reinterpret_cast<int*>(&selected_method), methods, IM_ARRAYSIZE(methods))) {
         std::cout << "Selected method: " << selected_method << std::endl;
     }

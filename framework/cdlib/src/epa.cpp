@@ -53,10 +53,6 @@ namespace cdlib {
         glm::vec3 min_normal;
         std::optional<float> min_distance = std::nullopt;
 
-        // Debug print the colliders
-        std::cout << "Collider 1: " << collider_1->get_shape()->get_debug_data() << std::endl;
-        std::cout << "Collider 2: " << collider_2->get_shape()->get_debug_data() << std::endl;
-
         bool repeated_point = false;
 
         while (!min_distance.has_value()) {
