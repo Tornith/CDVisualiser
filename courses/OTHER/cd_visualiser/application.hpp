@@ -119,7 +119,6 @@ protected:
     // Bruteforce
     bool brute_force_test = false;
     bool shoot_random_rays = false;
-    cdlib::Bruteforce brute_force;
 
     // Collision results
     cdlib::CollisionData collision_data;
@@ -138,6 +137,9 @@ protected:
 
     // SAP Specific
     cdlib::SAP sap;
+
+    // Debug
+    bool show_time_taken = false;
 
 public:
     Application(int initial_width, int initial_height, std::vector<std::string> arguments = {});
@@ -164,6 +166,8 @@ public:
     void step_collision_detection();
     void stop_step_by_step_collision_detection();
     void gjk_step_visualize(cdlib::GJK2State state);
+
+    void perform_bruteforce_test() const;
 
     static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& from, const glm::vec3& to);
     static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& origin, const glm::vec3& direction, float length);

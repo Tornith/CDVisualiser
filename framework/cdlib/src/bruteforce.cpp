@@ -4,17 +4,15 @@
 
 cdlib::CollisionData cdlib::Bruteforce::get_collision_data() {
     const bool collision = is_colliding();
-    if (!collision){
-        const auto [feature_1, feature_2] = get_closest_features();
-        return CollisionData(
-            collision,
-            glm::vec3(0.0f),
-            feature_distance(feature_1, feature_2),
-            feature_1,
-            feature_2
-        );
-    }
-    return CollisionData(collision);
+
+    const auto [feature_1, feature_2] = get_closest_features();
+    return CollisionData(
+        collision,
+        glm::vec3(0.0f),
+        feature_distance(feature_1, feature_2),
+        feature_1,
+        feature_2
+    );
 }
 
 std::pair<cdlib::FeatureP, cdlib::FeatureP> cdlib::Bruteforce::get_closest_features() const {

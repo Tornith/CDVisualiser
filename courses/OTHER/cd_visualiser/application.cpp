@@ -397,6 +397,17 @@ void Application::update(float delta) {
         last_object_rotation_pos = object_rotation_pos;
         update_object_positions();
     }
+
+    // Perform collision detection
+    if (auto_calculate_collision)
+    {
+        perform_collision_detection();
+    }
+
+    if (brute_force_test)
+    {
+        perform_bruteforce_test();
+    }
 }
 
 void Application::update_object_positions() {
@@ -731,7 +742,7 @@ void Application::perform_collision_detection() {
         collision_data = gjk.get_collision_data();
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        std::cout << "GJK+EPA took: " << duration.count() << " microseconds" << std::endl;
+        if (show_time_taken) std::cout << "GJK+EPA took: " << duration.count() << " microseconds" << std::endl;
 
         auto [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
         if (!auto_calculate_collision) std::cout << "Collision: " << is_colliding << std::endl;
@@ -751,7 +762,7 @@ void Application::perform_collision_detection() {
         collision_data = vclip.get_collision_data();
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        std::cout << "V-Clip took: " << duration.count() << " microseconds" << std::endl;
+        if (show_time_taken) std::cout << "V-Clip took: " << duration.count() << " microseconds" << std::endl;
 
         const auto [is_colliding, normal, depth, feature_1, feature_2] = collision_data;
 
@@ -815,6 +826,73 @@ void Application::stop_step_by_step_collision_detection() {
     direction_highlights.clear();
     feature_highlights.clear();
 }
+
+void Application::perform_bruteforce_test() const {
+    auto bruteforce = cdlib::Bruteforce(object_1->collider, object_2->collider);
+    const auto expected_data = bruteforce.get_collision_data();
+    if (expected_data.is_colliding == collision_data.is_colliding)
+    {
+        // If the selected method is V-Clip, check if the features are the same
+        if (selected_method == V_CLIP)
+        {
+            if (collision_data.is_colliding) return; // Don't check the nearest features, since they are not always the same in this case
+
+            auto check_if_features_equal = [](const cdlib::FeatureP& f1, const cdlib::FeatureP& f2) {
+                if (f1 == nullptr || f2 == nullptr){
+                    return false;
+                }
+                if (f1 == f2) return true;
+
+                // Check if the features are half_edges, if so check if they are potentially twins
+                if (const auto edge_1 = std::dynamic_pointer_cast<cdlib::HalfEdge>(f1); edge_1 != nullptr){
+                    if (const auto edge_2 = std::dynamic_pointer_cast<cdlib::HalfEdge>(f2); edge_2 != nullptr){
+                        return edge_1->start == edge_2->end && edge_1->end == edge_2->start;
+                    }
+                }
+
+                return false;
+            };
+
+            // Check distance difference
+            const auto distance = feature_distance(collision_data.feature_1, collision_data.feature_2);
+            const auto distance_difference = std::abs(distance - expected_data.depth);
+
+            // Check if the features are the same (or swapped), considering half-edge twins
+            if (check_if_features_equal(collision_data.feature_1, expected_data.feature_1) && check_if_features_equal(collision_data.feature_2, expected_data.feature_2) ||
+               check_if_features_equal(collision_data.feature_1, expected_data.feature_2) && check_if_features_equal(collision_data.feature_2, expected_data.feature_1) ||
+               distance_difference < 0.001f)
+            {
+                return;
+            }
+            std::cerr << "Distance difference: " << distance_difference << std::endl;
+            std::cerr << "Got: " << collision_data.feature_1->to_string() << " - " << collision_data.feature_2->to_string() << std::endl;
+            std::cerr << "Expected: " << expected_data.feature_1->to_string() << " - " << expected_data.feature_2->to_string() << std::endl;
+            std::cerr << "Collider 1: " << object_1->collider->get_shape()->get_debug_data() << std::endl;
+            std::cerr << "Collider 2: " << object_2->collider->get_shape()->get_debug_data() << std::endl;
+        }
+        else
+        {
+            return;
+        }
+    }
+
+    // Print-out debug message
+    std::cerr << std::endl << "Bruteforce test failed!" << std::endl;
+    std::cout << "--- Expected data ---" << std::endl;
+    std::cout << "Is colliding: " << "Bruteforce: " << expected_data.is_colliding << "   ResultData: " << collision_data.is_colliding << std::endl;
+    std::cout << std::endl;
+
+    std::cout << "--- Positioning ---" << std::endl;
+    std::cout << "Collider 1:" << std::endl;
+    std::cout << "\tPosition: (" << object_position_1.x << ", " << object_position_1.y << ", " <<  object_position_1.z << ")" << std::endl;
+    std::cout << "\tRotation: (" << object_rotation_1.x << ", " << object_rotation_1.y << ", " <<  object_rotation_1.z << ")" << std::endl;
+
+    std::cout << "Collider 2:" << std::endl;
+    std::cout << "\tPosition: (" << object_position_2.x << ", " << object_position_2.y << ", " <<  object_position_2.z << ")" << std::endl;
+    std::cout << "\tRotation: (" << object_rotation_2.x << ", " << object_rotation_2.y << ", " <<  object_rotation_2.z << ")" << std::endl;
+    std::cout << std::endl;
+}
+
 
 // ----------------------------------------------------------------------------
 // GUI
@@ -920,14 +998,16 @@ void Application::render_ui() {
 
     ImGui::Checkbox("Bruteforce test", &brute_force_test);
     if (brute_force_test) {
+        auto_calculate_collision = true;
         ImGui::Indent(20.f);
         ImGui::Checkbox("Shoot random rays", &shoot_random_rays);
         ImGui::Unindent(20.f);
     }
 
-    ImGui::Spacing();
-
-    ImGui::Checkbox("Auto-calculate collision", &auto_calculate_collision);
+    if (!brute_force_test)
+    {
+        ImGui::Checkbox("Auto-calculate collision", &auto_calculate_collision);
+    }
 
     if (selected_method == GJK_EPA) {
         ImGui::Checkbox("Show minkowski difference", &show_minkowski_difference);
@@ -965,7 +1045,6 @@ void Application::render_ui() {
         ImGui::Unindent(20.f);
     }
     else {
-        perform_collision_detection();
         ImGui::Text("The objects are: %s", collision_data.is_colliding ? "colliding" : "not colliding");
         if (collision_data.is_colliding) {
             ImGui::Text("Collision normal: %f %f %f", collision_data.normal.x, collision_data.normal.y, collision_data.normal.z);
