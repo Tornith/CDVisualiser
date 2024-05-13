@@ -1,34 +1,49 @@
 #pragma once
 #include <array>
 #include <memory>
+#include <unordered_map>
 
 #include "collision_detector.hpp"
 
 namespace cdlib {
     struct Endpoint {
-        std::shared_ptr<Collider> collider;
-        Endpoint *next, *prev;
-        float value;
+        ColliderP collider;
+        std::array<std::shared_ptr<Endpoint>, 3> prev;
+        std::array<std::shared_ptr<Endpoint>, 3> next;
+        glm::vec3 value;
         bool is_min;
     };
 
-    class SAP : BroadCollisionDetector {
+    using EndpointP = std::shared_ptr<Endpoint>;
+
+    class SAP final : BroadCollisionDetector {
     protected:
-        std::array<std::vector<Endpoint>, 3> endpoints;
-        std::vector<std::pair<std::shared_ptr<Collider>, std::shared_ptr<Collider>>> collisions;
+        std::array<EndpointP, 3> list_heads = {nullptr, nullptr, nullptr};
+        std::unordered_map<ColliderP, std::pair<EndpointP, EndpointP>> endpoint_map;
+        CollisionSet collisions;
     public:
         SAP() = default;
 
-        explicit SAP(const std::vector<std::shared_ptr<Collider>>& colliders)
+        explicit SAP(const std::set<ColliderP>& colliders)
             : BroadCollisionDetector(colliders) {
-            create_endpoints();
+            for (const auto& collider : colliders) {
+                insert(collider);
+            }
         }
 
-        void create_endpoints();
-        void sort_endpoints();
+        void move_endpoint(size_t axis, const EndpointP& endpoint, const EndpointP& dest);
+        void create_endpoints(const ColliderP& collider);
+        void update_endpoints(const ColliderP& collider);
 
-        void update_endpoints(std::vector<std::shared_ptr<Collider>> changed_colliders);
+        std::pair<EndpointP, EndpointP> get_endpoints(const ColliderP& collider);
 
-        [[nodiscard]] std::vector<std::pair<std::shared_ptr<Collider>, std::shared_ptr<Collider>>> get_collisions() override;
+        void insert(const ColliderP& collider) override;
+        void remove(const ColliderP& collider) override;
+
+        [[nodiscard]] CollisionSet get_collisions() override;
+
+        // Debug print lists
+        void print_lists() const;
+        void print_map() const;
     };
 }

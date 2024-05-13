@@ -422,7 +422,7 @@ namespace cdlib
     }
 
     bool VClip::debug_brute_force(bool should_collide, const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const {
-        auto bruteforce = Bruteforce(collider_1, collider_2);
+        auto bruteforce = NarrowBruteforce(collider_1, collider_2);
         const auto [is_colliding, normal, min_distance, min_feature_1, min_feature_2] = bruteforce.get_collision_data();
 
         if (is_colliding && should_collide){

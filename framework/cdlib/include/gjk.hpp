@@ -20,7 +20,7 @@ namespace cdlib {
     public:
         GJK() = default;
 
-        GJK(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : NarrowCollisionDetector(std::move(collider_1), std::move(collider_2)) {}
+        GJK(ColliderP collider_1, ColliderP collider_2) : NarrowCollisionDetector(std::move(collider_1), std::move(collider_2)) {}
 
         GJK(const GJK& other) = default;
 
@@ -81,7 +81,7 @@ namespace cdlib {
     public:
         GJKEPA() = default;
 
-        GJKEPA(const std::shared_ptr<Collider>& collider_1, const std::shared_ptr<Collider>& collider_2) : GJK(collider_1, collider_2) {}
+        GJKEPA(const ColliderP& collider_1, const ColliderP& collider_2) : GJK(collider_1, collider_2) {}
 
         explicit GJKEPA(const GJK& other) : GJK(other) {}
 
@@ -132,7 +132,7 @@ namespace cdlib {
 
     public:
         SteppableGJK() = default;
-        SteppableGJK(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : GJK(std::move(collider_1), std::move(collider_2)) {}
+        SteppableGJK(ColliderP collider_1, ColliderP collider_2) : GJK(std::move(collider_1), std::move(collider_2)) {}
 
         virtual void iteration_step();
 
@@ -174,7 +174,7 @@ namespace cdlib {
 
     public:
         SteppableGJKEPA() = default;
-        SteppableGJKEPA(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : SteppableGJK(std::move(collider_1), std::move(collider_2)) {}
+        SteppableGJKEPA(ColliderP collider_1, ColliderP collider_2) : SteppableGJK(std::move(collider_1), std::move(collider_2)) {}
 
         void iteration_step() override;
 

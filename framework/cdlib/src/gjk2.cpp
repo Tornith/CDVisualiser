@@ -82,8 +82,7 @@ namespace cdlib
 
     bool GJK2::passed_origin(const glm::vec3& support) const
     {
-        const auto asdf = dot(support, direction);
-        return asdf >= 0;
+        return dot(support, direction) >= 0;
     }
 
     void GJK2::set_simplex_indices(const std::initializer_list<size_t> indices)

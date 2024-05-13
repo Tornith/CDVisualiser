@@ -2,21 +2,21 @@
 #include "collision_detector.hpp"
 
 namespace cdlib{
-    class Bruteforce : public NarrowCollisionDetector {
+    class NarrowBruteforce final : public NarrowCollisionDetector {
     public:
-        Bruteforce() = default;
+        NarrowBruteforce() = default;
 
-        Bruteforce(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2)
+        NarrowBruteforce(ColliderP collider_1, ColliderP collider_2)
             : NarrowCollisionDetector(std::move(collider_1), std::move(collider_2)) {
         }
 
-        Bruteforce(const Bruteforce& other) = default;
+        NarrowBruteforce(const NarrowBruteforce& other) = default;
 
-        Bruteforce(Bruteforce&& other) noexcept
+        NarrowBruteforce(NarrowBruteforce&& other) noexcept
             : NarrowCollisionDetector(other.collider_1, other.collider_2) {
         }
 
-        Bruteforce& operator=(const Bruteforce& other) {
+        NarrowBruteforce& operator=(const NarrowBruteforce& other) {
             if (this == &other)
                 return *this;
             collider_1 = other.collider_1;
@@ -24,7 +24,7 @@ namespace cdlib{
             return *this;
         }
 
-        Bruteforce& operator=(Bruteforce&& other) noexcept {
+        NarrowBruteforce& operator=(NarrowBruteforce&& other) noexcept {
             if (this == &other)
                 return *this;
             collider_1 = other.collider_1;
@@ -32,11 +32,47 @@ namespace cdlib{
             return *this;
         }
 
-        ~Bruteforce() override = default;
+        ~NarrowBruteforce() override = default;
 
         [[nodiscard]] std::pair<FeatureP, FeatureP> get_closest_features() const;
         [[nodiscard]] bool is_colliding() const;
 
         CollisionData get_collision_data() override;
+    };
+
+    class BroadBruteforce final : public BroadCollisionDetector {
+    public:
+        BroadBruteforce() = default;
+
+        explicit BroadBruteforce(std::set<ColliderP> colliders)
+            : BroadCollisionDetector(std::move(colliders)) {
+        }
+
+        BroadBruteforce(const BroadBruteforce& other) = default;
+
+        BroadBruteforce(BroadBruteforce&& other) noexcept
+            : BroadCollisionDetector(other.colliders) {
+        }
+
+        BroadBruteforce& operator=(const BroadBruteforce& other) {
+            if (this == &other)
+                return *this;
+            colliders = other.colliders;
+            return *this;
+        }
+
+        BroadBruteforce& operator=(BroadBruteforce&& other) noexcept {
+            if (this == &other)
+                return *this;
+            colliders = other.colliders;
+            return *this;
+        }
+
+        ~BroadBruteforce() override = default;
+
+        void insert(const ColliderP& collider) override;
+        void remove(const ColliderP& collider) override;
+
+        [[nodiscard]] CollisionSet get_collisions() override;
     };
 }

@@ -13,8 +13,8 @@ namespace cdlib {
     class EPA {
     protected:
         Simplex simplex;
-        std::shared_ptr<Collider> collider_1{};
-        std::shared_ptr<Collider> collider_2{};
+        ColliderP collider_1{};
+        ColliderP collider_2{};
 
         std::vector<glm::vec3> polytope;
         std::vector<std::array<size_t, 3>> faces;
@@ -22,7 +22,7 @@ namespace cdlib {
     public:
         EPA() = default;
 
-        EPA(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2, const Simplex& simplex)
+        EPA(ColliderP collider_1, ColliderP collider_2, const Simplex& simplex)
             : simplex(simplex), collider_1(std::move(collider_1)), collider_2(std::move(collider_2)) {
             polytope = std::vector(simplex.begin(), simplex.end());
             faces = {

@@ -21,8 +21,6 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     prepare_lights();
     prepare_scene();
     prepare_collision_detectors();
-
-    update_object_positions();
 }
 
 Application::~Application() = default;
@@ -70,7 +68,7 @@ void Application::prepare_collision_detectors() {
     vclip = cdlib::VClip(object_1->collider, object_2->collider);
 
     auto colliders = std::ranges::transform_view(convex_objects, [](std::shared_ptr<ConvexObject>& convex_object) { return convex_object->collider; });
-    auto colliders_vector = std::vector<std::shared_ptr<cdlib::Collider>>(std::begin(colliders), std::end(colliders));
+    const auto colliders_vector = std::set<cdlib::ColliderP>(std::begin(colliders), std::end(colliders));
     sap = cdlib::SAP(colliders_vector);
 }
 
@@ -84,8 +82,8 @@ void Application::prepare_convex_objects() {
     auto p1 = get_positions_from_buffer(v1);
     auto p2 = get_positions_from_buffer(v2);
 
-    auto m1 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -4.0f * object_distance));
-    auto m2 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f * object_distance));
+    auto m1 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+    auto m2 = translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 
     // Convert indicies to array of faces
     auto faces1 = get_faces_from_buffer(i1);
@@ -122,6 +120,8 @@ void Application::prepare_convex_objects() {
         auto o = ConvexObject{ std::move(v), m, c, s };
         convex_objects.push_back(std::make_shared<ConvexObject>(std::move(o)));
     }
+
+    update_object_positions();
 }
 
 
@@ -161,6 +161,9 @@ void Application::recalculate_positions() {
 
     object_1->set_model_matrix(m1);
     object_2->set_model_matrix(m2);
+
+    last_object_distance = object_distance;
+    last_object_rotation_pos = object_rotation_pos;
 }
 
 void Application::recalculate_detailed_positioning() {
@@ -392,9 +395,10 @@ void Application::update(float delta) {
     phong_lights_ubo.add(PhongLightData::CreateDirectionalLight(light_position, glm::vec3(0.75f), glm::vec3(0.9f), glm::vec3(1.0f)));
     phong_lights_ubo.update_opengl_data();
 
-    if (rotate_and_move_objects || detailed_positioning || (abs(object_distance - last_object_distance) > std::numeric_limits<float>::epsilon() || abs(object_rotation_pos - last_object_rotation_pos) > std::numeric_limits<float>::epsilon())) {
-        last_object_distance = object_distance;
-        last_object_rotation_pos = object_rotation_pos;
+    if (rotate_and_move_objects || detailed_positioning || (
+        object_distance != last_object_distance ||
+        object_rotation_pos != last_object_rotation_pos
+    )) {
         update_object_positions();
     }
 
@@ -523,6 +527,26 @@ void Application::create_feature_highlights(const cdlib::FeatureP& feature)
     }
 }
 
+void Application::update_aabb_objects() {
+    aabb_objects.clear();
+    for (const auto& object : convex_objects) {
+        // Create a new cube geometry
+        auto cube = Cube();
+        cube.update(object->collider->get_aabb().min, object->collider->get_aabb().max);
+
+        // Create sceneobject
+        constexpr auto model_matrix = glm::mat4(1.0f);
+
+        // Find a CollisionPair, that contains the current collider
+        const auto is_collliding = std::ranges::find_if(sap_collisions, [object](const auto& pair) {
+            return pair.contains(object->collider);
+        }) != std::end(sap_collisions);
+
+        auto scene_object = SceneObject{cube, ModelUBO(model_matrix), is_collliding ? red_material_ubo : yellow_material_ubo};
+        aabb_objects.push_back(scene_object);
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Render
 // ----------------------------------------------------------------------------
@@ -578,8 +602,9 @@ void Application::render_scene() {
         // Iterate over the convex objects and render them
         for (const auto& object : convex_objects) {
             // If the object is one of the main objects, check if the show_convex_objects flag is set
-            if ((object == object_1 || object == object_2) && show_convex_objects)
+            if ((object == object_1 || object == object_2) && show_convex_objects) {
                 render_object(object->scene_object, default_lit_program);
+            }
             // If the object is anything else, but is not minkowski or main object, its an extra object and check if the show_extra_objects flag is set
             else if (object != object_1 && object != object_2 && show_extra_objects) {
                 render_object(object->scene_object, default_lit_program);
@@ -635,6 +660,16 @@ void Application::render_scene() {
         for (SceneObject& object : feature_highlights) {
             render_object(object, default_unlit_program);
         }
+    }
+
+    if (selected_method == SAP || selected_method == AABBTREE) {
+        // Render AABB objects as wireframe
+        glDisable(GL_CULL_FACE);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        for (SceneObject& object : aabb_objects) {
+            render_object(object, default_unlit_program);
+        }
+        glEnable(GL_CULL_FACE);
     }
 
     // Draw direction highlights
@@ -738,7 +773,7 @@ void Application::perform_collision_detection() {
         gjk.reset();
 
         // Measure time for collision detection
-        auto start = std::chrono::high_resolution_clock::now();
+        const auto start = std::chrono::high_resolution_clock::now();
         collision_data = gjk.get_collision_data();
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -758,7 +793,7 @@ void Application::perform_collision_detection() {
     } else if (selected_method == V_CLIP) {
         vclip.reset();
 
-        auto start = std::chrono::high_resolution_clock::now();
+        const auto start = std::chrono::high_resolution_clock::now();
         collision_data = vclip.get_collision_data();
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -786,6 +821,26 @@ void Application::perform_collision_detection() {
         highlighted_feature_2 = feature_2;
         create_feature_highlights(feature_1);
         create_feature_highlights(feature_2);
+    } else if (selected_method == SAP) {
+        // Perform sweep-and-prune collision detection
+        const auto start = std::chrono::high_resolution_clock::now();
+        // Update all objects
+        for (const auto& object : convex_objects) {
+            sap.update_endpoints(object->collider);
+        }
+        sap_collisions = sap.get_collisions();
+        const auto end = std::chrono::high_resolution_clock::now();
+        const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        std::cout << "Sweep-and-Prune took: " << duration.count() << " microseconds" << std::endl;
+
+        // Update the AABBs
+        update_aabb_objects();
+
+        if (!auto_calculate_collision) {
+            std::cout << "Collisions: " << sap_collisions.size() << std::endl;
+            sap.print_lists();
+            sap.print_map();
+        }
     }
 }
 
@@ -828,7 +883,7 @@ void Application::stop_step_by_step_collision_detection() {
 }
 
 void Application::perform_bruteforce_test() const {
-    auto bruteforce = cdlib::Bruteforce(object_1->collider, object_2->collider);
+    auto bruteforce = cdlib::NarrowBruteforce(object_1->collider, object_2->collider);
     const auto expected_data = bruteforce.get_collision_data();
     if (expected_data.is_colliding == collision_data.is_colliding)
     {
@@ -986,6 +1041,7 @@ void Application::render_ui() {
     ImGui::Spacing();
 
     ImGui::Checkbox("Wireframe", &show_wireframe);
+    // ImGui::Checkbox("Show AABBs", &show_aabbs);
 
     ImGui::Spacing();
 

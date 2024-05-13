@@ -70,10 +70,10 @@ protected:
 
     bool show_gui = true;
     float object_distance = 1.0f;
-    float last_object_distance = 1.0f;
+    float last_object_distance = std::numeric_limits<float>::max();
 
     float object_rotation_pos = 0.0f;
-    float last_object_rotation_pos = 0.0f;
+    float last_object_rotation_pos = std::numeric_limits<float>::max();
 
     bool detailed_positioning = false;
     glm::vec3 object_position_1 = {0.379608, -1.09445, -0.700208f};
@@ -119,6 +119,7 @@ protected:
     // Bruteforce
     bool brute_force_test = false;
     bool shoot_random_rays = false;
+    cdlib::NarrowBruteforce brute_force;
 
     // Collision results
     cdlib::CollisionData collision_data;
@@ -133,10 +134,14 @@ protected:
     cdlib::FeatureP highlighted_feature_1;
     cdlib::FeatureP highlighted_feature_2;
 
+    // AABBs
+    std::vector<SceneObject> aabb_objects;
+
     // AABBTREE Specific
 
     // SAP Specific
     cdlib::SAP sap;
+    cdlib::CollisionSet sap_collisions;
 
     // Debug
     bool show_time_taken = false;
@@ -193,6 +198,8 @@ public:
 
     void recalculate_minkowski_difference();
 
+    void update_aabb_objects();
+
     // ----------------------------------------------------------------------------
     // Update
     // ----------------------------------------------------------------------------
@@ -217,7 +224,7 @@ public:
      * @param 	object 	The object to render.
      * @param 	program	The program to be used.
      */
-    static void render_object(SceneObject& object, ShaderProgram& program) ;
+    static void render_object(SceneObject& object, ShaderProgram& program);
 
     // ----------------------------------------------------------------------------
     // GUI

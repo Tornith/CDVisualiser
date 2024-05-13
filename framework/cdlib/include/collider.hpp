@@ -6,23 +6,34 @@
 #include "convex_polyhedron.hpp"
 
 namespace cdlib {
+    struct AABB {
+        glm::vec3 min;
+        glm::vec3 max;
+
+        bool operator==(const AABB& other) const {
+            return min == other.min && max == other.max;
+        }
+
+        [[nodiscard]] bool intersects(const AABB& other) const {
+            return min.x <= other.max.x && max.x >= other.min.x &&
+                   min.y <= other.max.y && max.y >= other.min.y &&
+                   min.z <= other.max.z && max.z >= other.min.z;
+        }
+    };
+
     class Collider {
     protected:
         std::shared_ptr<ConvexPolyhedron> shape;
-        std::pair<glm::vec3, glm::vec3> aabb;
-
-        std::vector<glm::vec3> cached_global_vertices;
-        bool is_cache_valid{ false };
+        AABB aabb{};
 
     public:
         Collider() = default;
 
         explicit Collider(const std::shared_ptr<ConvexPolyhedron>& shape) : shape(shape) {
-            aabb = calculate_aabb(get_global_vertices());
+            update_aabb();
         }
 
         Collider(const std::shared_ptr<ConvexPolyhedron>& shape, const glm::mat4& transform) : shape(shape) {
-            aabb = calculate_aabb(get_global_vertices());
             shape->set_transform(transform);
         }
 
@@ -51,24 +62,16 @@ namespace cdlib {
             return shape->get_vertices();
         }
 
-        [[nodiscard]] std::vector<glm::vec3> get_global_vertices() {
-            if (is_cache_valid) {
-                return cached_global_vertices;
-            }
-
+        [[nodiscard]] std::vector<glm::vec3> get_global_vertices() const {
             const auto view = std::ranges::views::transform(shape->get_vertices(), [this](const VertexP& vertex) {
                 return vertex->get_position();
             });
 
-            is_cache_valid = true;
-            cached_global_vertices = std::vector(view.begin(), view.end());
-
-            return cached_global_vertices;
+            return {view.begin(), view.end()};
         }
 
         virtual void set_shape(const std::shared_ptr<ConvexPolyhedron>& shape) {
             Collider::shape = shape;
-            is_cache_valid = false;
         }
 
         [[nodiscard]] std::shared_ptr<ConvexPolyhedron> get_shape() const {
@@ -85,24 +88,24 @@ namespace cdlib {
 
         void set_transform(const glm::mat4& transform) {
             shape->set_transform(transform);
-            is_cache_valid = false;
+            update_aabb();
         }
 
         [[nodiscard]] virtual glm::vec3 support(const glm::vec3& direction) const = 0;
 
-        void set_aabb(const std::pair<glm::vec3, glm::vec3>& aabb) {
+        void set_aabb(const AABB& aabb) {
             Collider::aabb = aabb;
         }
 
-        [[nodiscard]] const std::pair<glm::vec3, glm::vec3>& get_aabb() const {
+        void update_aabb() {
+            aabb = calculate_aabb(get_global_vertices());
+        }
+
+        [[nodiscard]] const AABB& get_aabb() const {
             return aabb;
         }
 
-        void update_aabb() {
-            aabb = calculate_aabb(shape->get_vertices());
-        }
-
-        static std::pair<glm::vec3, glm::vec3> calculate_aabb(const std::vector<glm::vec3>& vertices) {
+        static AABB calculate_aabb(const std::vector<glm::vec3>& vertices) {
             glm::vec3 min = vertices[0];
             glm::vec3 max = vertices[0];
 
@@ -134,6 +137,8 @@ namespace cdlib {
             return !is_empty;
         }
     };
+
+    using ColliderP = std::shared_ptr<Collider>;
 
     class ConvexCollider final : public Collider {
     public:

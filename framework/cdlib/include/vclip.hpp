@@ -68,7 +68,7 @@ namespace cdlib{
     public:
         VClip() = default;
 
-        VClip(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2)
+        VClip(ColliderP collider_1, ColliderP collider_2)
             : NarrowCollisionDetector(std::move(collider_1), std::move(collider_2)) {
         }
 
@@ -294,7 +294,7 @@ namespace cdlib{
               ray_direction(ray_direction)
         {}
 
-        VClipRaycast(const std::shared_ptr<Collider>& collider, const glm::vec3& ray_origin, const glm::vec3& ray_direction)
+        VClipRaycast(const ColliderP& collider, const glm::vec3& ray_origin, const glm::vec3& ray_direction)
             : ray_origin(ray_origin), ray_direction(ray_direction)
         {
             collider_1 = collider;

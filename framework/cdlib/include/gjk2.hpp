@@ -30,7 +30,7 @@ namespace cdlib {
     public:
         GJK2() = default;
 
-        GJK2(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2)
+        GJK2(ColliderP collider_1, ColliderP collider_2)
             : NarrowCollisionDetector(std::move(collider_1), std::move(collider_2)) {
         }
 
@@ -93,7 +93,7 @@ namespace cdlib {
     public:
         GJK2EPA() = default;
 
-        GJK2EPA(const std::shared_ptr<Collider>& collider_1, const std::shared_ptr<Collider>& collider_2)
+        GJK2EPA(const ColliderP& collider_1, const ColliderP& collider_2)
             : GJK2(collider_1, collider_2)
         {}
 
@@ -118,7 +118,7 @@ namespace cdlib {
 
     public:
         SteppableGJK2() = default;
-        SteppableGJK2(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : GJK2(std::move(collider_1), std::move(collider_2)) {}
+        SteppableGJK2(ColliderP collider_1, ColliderP collider_2) : GJK2(std::move(collider_1), std::move(collider_2)) {}
 
         [[nodiscard]] glm::vec3 get_current_point_a() const { return current_point_a; }
         [[nodiscard]] glm::vec3 get_current_point_b() const { return current_point_b; }
@@ -153,7 +153,7 @@ namespace cdlib {
     class SteppableGJK2EPA : public SteppableGJK2 {
     public:
         SteppableGJK2EPA() = default;
-        SteppableGJK2EPA(std::shared_ptr<Collider> collider_1, std::shared_ptr<Collider> collider_2) : SteppableGJK2(std::move(collider_1), std::move(collider_2)) {}
+        SteppableGJK2EPA(ColliderP collider_1, ColliderP collider_2) : SteppableGJK2(std::move(collider_1), std::move(collider_2)) {}
 
         [[nodiscard]] GJK2State step() override;
         [[nodiscard]] CollisionData get_epa_data() const;
