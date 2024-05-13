@@ -70,7 +70,7 @@ namespace cdlib {
                 prev = nullptr;
                 while (current != nullptr && current->value[axis] < max_endpoint->value[axis]) {
                     // Check for potential overlap
-                    if (current->is_min && current != min_endpoint && collider->get_aabb().intersects(current->collider->get_aabb())) {
+                    if (current->is_min && current->collider != collider && collider->get_aabb().intersects(current->collider->get_aabb())) {
                         collisions.insert({collider, current->collider});
                     }
 
@@ -171,7 +171,7 @@ namespace cdlib {
                 // If the endpoint is a min, next is a max and we're walking left,
                 // Or if the endpoint is a max, next is a min and we're walking right, check for overlap
                 if ((left && endpoint->is_min && !next->is_min) || (!left && !endpoint->is_min && next->is_min)) {
-                    if (collider->get_aabb().intersects(next->collider->get_aabb())) {
+                    if (next->collider != collider && collider->get_aabb().intersects(next->collider->get_aabb())) {
                         collisions.insert({collider, next->collider});
                     }
                 }
