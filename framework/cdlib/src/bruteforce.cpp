@@ -156,7 +156,7 @@ namespace cdlib {
 
         return false;
     }
-}
+
     void BroadBruteforce::insert(const ColliderP& collider) {
         colliders.insert(collider);
     }
