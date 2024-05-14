@@ -180,4 +180,51 @@ namespace cdlib {
 
         return collisions;
     }
+
+    std::set<ColliderP> NarrowBruteforce::raycast(const Ray& ray, const std::set<ColliderP>& colliders) {
+        // Check if the ray intersects with any collider's triangle
+        std::set<ColliderP> hits;
+        for (const auto& collider : colliders){
+            const auto result = raycast(ray, collider);
+            if (result.is_colliding){
+                hits.insert(collider);
+            }
+        }
+
+        return hits;
+    }
+
+    CollisionData NarrowBruteforce::raycast(const Ray& ray, const ColliderP& collider) {
+        const auto faces = collider->get_shape()->get_faces();
+        for (const auto& face : faces){
+            const auto vertices = face->get_vertices();
+            const auto vertex_0 = vertices[0]->get_position();
+            const auto vertex_1 = vertices[1]->get_position();
+            const auto vertex_2 = vertices[2]->get_position();
+
+            glm::vec3 point;
+
+            if (Ray::intersects_triangle(
+                ray,
+                vertex_0,
+                vertex_1,
+                vertex_2,
+                point
+            )){
+                return CollisionData(true);
+            }
+        }
+        return CollisionData(false);
+    }
+
+    std::set<ColliderP> BroadBruteforce::raycast(const Ray& ray) {
+        // For each collider, check if the ray intersects the collider's AABB
+        std::set<ColliderP> hits;
+        for (const auto& collider : colliders){
+            if (collider->get_aabb().raycast(ray).has_value()){
+                hits.insert(collider);
+            }
+        }
+        return hits;
+    }
 }

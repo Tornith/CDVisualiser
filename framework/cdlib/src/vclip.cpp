@@ -410,6 +410,10 @@ namespace cdlib
         }
 
         const bool is_colliding = state == PENETRATION;
+        if (feature_1 == nullptr || feature_2 == nullptr){
+            return { is_colliding };
+        }
+
         const float distance = feature_distance(feature_1, feature_2) * (is_colliding ? -1.0f : 1.0f);
         const auto normal = glm::vec3(0.f);
         return { is_colliding, normal, distance, feature_1, feature_2 };
@@ -495,8 +499,21 @@ namespace cdlib
 
     VClipState VClipRaycast::execute_vertex_edge()
     {
-        const auto vertex = primary_feature<Vertex>();
-        const auto edge = secondary_feature<HalfEdge>();
+        auto vertex = primary_feature<Vertex>();
+        auto edge = secondary_feature<HalfEdge>();
+
+        if (vertex == nullptr || edge == nullptr){
+            // Spetial case, when endpoint of the ray is the vertex against an edge of the collider
+            vertex = secondary_feature<Vertex>();
+            edge = primary_feature<HalfEdge>();
+
+            const auto [in_region, plane] = Voronoi::in_voronoi_region(edge, vertex->get_position());
+            if (!in_region && plane.has_value()){
+                // Violated plane exists
+                set_feature<HalfEdge>(plane.value().feature);
+                return CONTINUE;
+            }
+        }
 
         // Clip E against V
         const auto clip_data = clip_edge(edge, vertex);
@@ -584,11 +601,23 @@ namespace cdlib
             return ERROR;
         }
         if (derivative.value() >= 0){
-            set_feature<Face>(clip_data.neighbour_l);
+            if (clip_data.neighbour_l != nullptr){
+                set_feature<Face>(clip_data.neighbour_l);
+            } else {
+                set_feature<HalfEdge>(edge->start);
+            }
         } else {
-            set_feature<Face>(clip_data.neighbour_h);
+            if (clip_data.neighbour_h != nullptr){
+                set_feature<Face>(clip_data.neighbour_h);
+            } else {
+                set_feature<HalfEdge>(edge->end);
+            }
         }
 
         return CONTINUE;
+    }
+
+    CollisionData VClip::raycast(const Ray& ray, const ColliderP& collider) {
+        return VClipRaycast(collider, ray).get_collision_data();
     }
 }

@@ -38,6 +38,9 @@ namespace cdlib{
         [[nodiscard]] bool is_colliding() const;
 
         CollisionData get_collision_data() override;
+
+        static std::set<RayCastResult> raycast(const Ray& ray, const std::set<ColliderP>& colliders);
+        static RayCastResult raycast(const Ray& ray, const ColliderP& collider);
     };
 
     class BroadBruteforce final : public BroadCollisionDetector {
@@ -74,5 +77,7 @@ namespace cdlib{
         void remove(const ColliderP& collider) override;
 
         [[nodiscard]] CollisionSet get_collisions() override;
+
+        [[nodiscard]] std::set<ColliderP> raycast(const Ray& ray) override;
     };
 }

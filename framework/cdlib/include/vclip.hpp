@@ -8,6 +8,7 @@
 #include "collision_data.hpp"
 #include "collision_detector.hpp"
 #include "convex_polyhedron.hpp"
+#include "ray.hpp"
 #include "voronoi.hpp"
 
 namespace cdlib{
@@ -213,6 +214,8 @@ namespace cdlib{
         [[nodiscard]] CollisionData get_collision_data() override;
 
         [[nodiscard]] bool debug_brute_force(bool should_collide, const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const;
+
+        static CollisionData raycast(const Ray& ray, const ColliderP& collider);
     };
 
     [[nodiscard]] ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature);
@@ -283,22 +286,20 @@ namespace cdlib{
     }
 
     class VClipRaycast final : VClip {
-        glm::vec3 ray_origin{};
-        glm::vec3 ray_direction{};
+        Ray ray;
 
     public:
-        VClipRaycast() = default;
+        VClipRaycast() = delete;
 
-        VClipRaycast(const glm::vec3& ray_origin, const glm::vec3& ray_direction)
-            : ray_origin(ray_origin),
-              ray_direction(ray_direction)
-        {}
+        VClipRaycast(const ColliderP& collider, const Ray& ray) : ray(ray) {
+            collider_1 = collider;
+            collider_2 = std::make_shared<RayCollider>(clip_ray_against_aabb(collider));
+        }
 
         VClipRaycast(const ColliderP& collider, const glm::vec3& ray_origin, const glm::vec3& ray_direction)
-            : ray_origin(ray_origin), ray_direction(ray_direction)
-        {
+            : ray(ray_origin, ray_direction) {
             collider_1 = collider;
-            collider_2 = std::make_shared<RayCollider>(ray_origin, ray_direction);
+            collider_2 = std::make_shared<RayCollider>(clip_ray_against_aabb(collider));
         }
 
         VClipRaycast(const VClipRaycast& other) = default;
@@ -316,5 +317,19 @@ namespace cdlib{
         [[nodiscard]] VClipState execute_vertex_edge() override;
         [[nodiscard]] VClipState execute_edge_edge() override;
         [[nodiscard]] VClipState execute_edge_face() override;
+
+    private:
+        [[nodiscard]] Ray clip_ray_against_aabb(const ColliderP& collider) {
+            // Clip the ray against the AABB of the collider
+            const auto aabb_raycast = collider->get_aabb().raycast(ray);
+            if (!aabb_raycast.has_value()){
+                state = DONE;
+                return ray;
+            }
+
+            // We create a new ray with the clipped t values
+            const auto clipped_ray = ray.clip(aabb_raycast.value().first, aabb_raycast.value().second);
+            return clipped_ray;
+        }
     };
 }

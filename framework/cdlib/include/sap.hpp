@@ -5,6 +5,7 @@
 
 #include "aabb.hpp"
 #include "collision_detector.hpp"
+#include "ray.hpp"
 
 namespace cdlib {
     struct Endpoint {
@@ -38,7 +39,7 @@ namespace cdlib {
             }
         }
 
-        void move_endpoint(size_t axis, const EndpointP& endpoint, const EndpointP& dest);
+        void swap_endpoints(size_t axis, const EndpointP& endpoint, bool left);
         void create_endpoints(const ColliderP& collider);
         void update_endpoints(const ColliderP& collider);
 
@@ -49,7 +50,7 @@ namespace cdlib {
 
         [[nodiscard]] CollisionSet get_collisions() override;
 
-
+        [[nodiscard]] std::set<ColliderP> raycast(const Ray& ray) override;
 
         // Debug print lists
         void print_lists() const;

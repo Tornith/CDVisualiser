@@ -1,6 +1,9 @@
 #pragma once
+#include <optional>
 #include <glm/vec3.hpp>
 #include <glm/ext/scalar_common.hpp>
+
+#include "ray.hpp"
 
 namespace cdlib {
     struct AABB {
@@ -50,7 +53,7 @@ namespace cdlib {
             return {glm::min(min, point), glm::max(max, point)};
         }
 
-        [[nodiscard]] float raycast(const glm::vec3& from, const glm::vec3& to, float t_min, float t_max) const {
+        [[nodiscard]] std::optional<std::pair<float, float>> raycast(const glm::vec3& from, const glm::vec3& to, float t_min, float t_max) const {
             const auto direction = to - from;
             const auto inv_direction = 1.0f / direction;
 
@@ -66,11 +69,15 @@ namespace cdlib {
                 t_max = glm::min(t1, t_max);
 
                 if (t_max <= t_min) {
-                    return std::numeric_limits<float>::infinity();
+                    return std::nullopt;
                 }
             }
 
-            return t_min;
+            return std::make_pair(t_min, t_max);
+        }
+
+        [[nodiscard]] std::optional<std::pair<float, float>> raycast(const Ray& ray) const {
+            return raycast(ray.from(), ray.to(), 0.0f, 1.0f);
         }
 
         [[nodiscard]] AABB fatten(const glm::vec3& margin) const {

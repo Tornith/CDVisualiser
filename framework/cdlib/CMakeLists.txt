@@ -23,6 +23,7 @@ target_sources(
         include/utils.hpp
 
         include/aabb.hpp
+        include/ray.hpp
 
         include/convex_polyhedron.hpp
         src/convex_polyhedron.cpp

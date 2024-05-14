@@ -353,11 +353,11 @@ namespace cdlib {
                     std::swap(left_distance, right_distance);
                 }
 
-                if (left_distance == std::numeric_limits<float>::infinity()) {
+                if (!left_distance.has_value()) {
                     continue;
                 }
 
-                if (right_distance != std::numeric_limits<float>::infinity()) {
+                if (right_distance.has_value()) {
                     stack.push(right);
                 }
                 stack.push(left);
@@ -535,12 +535,12 @@ namespace cdlib {
         }
     }
 
-    std::vector<ColliderP> AABBTree::raycast(const glm::vec3& origin, const glm::vec3& direction) {
-        const auto input = AABBTreeRaycast{ origin, origin + direction, 1.0f};
-        std::vector<ColliderP> colliders;
+    std::set<ColliderP> AABBTree::raycast(const Ray& ray) {
+        const auto input = AABBTreeRaycast{ ray.from(), ray.to(), 1.0f};
+        std::set<ColliderP> colliders;
 
         query_ray(input, [&colliders](const AABBTreeRaycast& raycast, const ColliderP& collider) {
-            colliders.push_back(collider);
+            colliders.insert(collider);
             return raycast.max_fraction;
         });
 

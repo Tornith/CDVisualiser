@@ -7,17 +7,17 @@ namespace cdlib
      * GJK
      ********************/
 
-    glm::vec3 GJK2::get_support_point(const glm::vec3& direction) const
+    glm::vec3 GJK::get_support_point(const glm::vec3& direction) const
     {
         return collider_1->support(direction) - collider_2->support(-direction);
     }
 
-    GJK2State GJK2::initialize()
+    GJKState GJK::initialize()
     {
         // Check if the colliders are valid
         if (!collider_1->is_valid() && !collider_2->is_valid()){
             std::cerr << "GJK: Invalid colliders" << std::endl;
-            return GJK2State::ERROR;
+            return GJKState::ERROR;
         }
 
         // Get an arbitrary direction
@@ -27,17 +27,17 @@ namespace cdlib
         // Insert the support point into the simplex and look in the direction of the origin
         insert_simplex_point(support_point);
         direction = normalize(-support_point);
-        return GJK2State::CONTINUE;
+        return GJKState::CONTINUE;
     }
 
-    GJK2State GJK2::execute_iteration()
+    GJKState GJK::execute_iteration()
     {
         // Get a new support point
         const auto support_point = get_support_point(direction);
 
         if(!passed_origin(support_point))
         {
-            return GJK2State::NO_COLLISION;
+            return GJKState::NO_COLLISION;
         }
 
         insert_simplex_point(support_point);
@@ -45,32 +45,32 @@ namespace cdlib
         return update_simplex();
     }
 
-    GJK2State GJK2::step()
+    GJKState GJK::step()
     {
-        if (state == GJK2State::ERROR){
-            return GJK2State::ERROR;
+        if (state == GJKState::ERROR){
+            return GJKState::ERROR;
         }
-        if (state == GJK2State::INIT){
+        if (state == GJKState::INIT){
             return initialize();
         }
         return execute_iteration();
     }
 
-    void GJK2::reset()
+    void GJK::reset()
     {
         simplex.clear();
         direction = glm::vec3(0.0f);
-        state = GJK2State::INIT;
+        state = GJKState::INIT;
     }
 
-    CollisionData GJK2::calculate_collision_data() {
-        return {state == GJK2State::COLLISION};
+    CollisionData GJK::calculate_collision_data() {
+        return {state == GJKState::COLLISION};
     }
 
-    CollisionData GJK2::get_collision_data()
+    CollisionData GJK::get_collision_data()
     {
         auto iteration = 0;
-        while (state == GJK2State::CONTINUE || state == GJK2State::UPDATE_SIMPLEX || state == GJK2State::INIT){
+        while (state == GJKState::CONTINUE || state == GJKState::UPDATE_SIMPLEX || state == GJKState::INIT){
             state = step();
             if (iteration++ > 10000){
                 std::cerr << "GJK: Iteration limit reached" << std::endl;
@@ -80,22 +80,22 @@ namespace cdlib
         return calculate_collision_data();
     }
 
-    bool GJK2::passed_origin(const glm::vec3& support) const
+    bool GJK::passed_origin(const glm::vec3& support) const
     {
         return dot(support, direction) >= 0;
     }
 
-    void GJK2::set_simplex_indices(const std::initializer_list<size_t> indices)
+    void GJK::set_simplex_indices(const std::initializer_list<size_t> indices)
     {
         simplex.reorder(indices);
     }
 
-    void GJK2::insert_simplex_point(const glm::vec3& point)
+    void GJK::insert_simplex_point(const glm::vec3& point)
     {
         simplex.insert(point);
     }
 
-    GJK2State GJK2::update_simplex()
+    GJKState GJK::update_simplex()
     {
         switch (simplex.size()){
             case 2:
@@ -106,11 +106,11 @@ namespace cdlib
                 return update_tetrahedron_simplex();
             default:
                 std::cerr << "GJK: Invalid simplex size" << std::endl;
-                return GJK2State::ERROR;
+                return GJKState::ERROR;
         }
     }
 
-    GJK2State GJK2::update_line_simplex()
+    GJKState GJK::update_line_simplex()
     {
         const auto ab = simplex[1] - simplex[0];
         const auto ao = -simplex[0];
@@ -126,10 +126,10 @@ namespace cdlib
             direction = ao;
         }
 
-        return GJK2State::CONTINUE;
+        return GJKState::CONTINUE;
     }
 
-    GJK2State GJK2::update_triangle_simplex()
+    GJKState GJK::update_triangle_simplex()
     {
         // Check the "projected" origin against the voronoi regions of a triangle
         // Since the newest point added was A, then origin cannot lie in direction of the BC edge.
@@ -151,7 +151,7 @@ namespace cdlib
             if (dot(ac, ao) > 0) {
                 set_simplex_indices({0, 2});
                 direction = cross(cross(ac, ao), ac); // Recalculate the normal of the line, pointing towards the origin
-                return GJK2State::CONTINUE;
+                return GJKState::CONTINUE;
             }
             // Otherwise we are in the vertex region of A -> return the line case for AB
             set_simplex_indices({0, 1});
@@ -163,7 +163,7 @@ namespace cdlib
         if (dot(abn, ao) > 0) {
             set_simplex_indices({0, 1});
             direction = cross(cross(ab, ao), ab); // Recalculate the normal of the line, pointing towards the origin
-            return GJK2State::CONTINUE;
+            return GJKState::CONTINUE;
         }
 
         // If both fail, we are inside the triangle -> Check if origin is above or below
@@ -175,10 +175,10 @@ namespace cdlib
             direction = -n;
         }
 
-        return GJK2State::CONTINUE;
+        return GJKState::CONTINUE;
     }
 
-    GJK2State GJK2::update_tetrahedron_simplex()
+    GJKState GJK::update_tetrahedron_simplex()
     {
         const auto ab = simplex[1] - simplex[0];
         const auto ac = simplex[2] - simplex[0];
@@ -204,15 +204,30 @@ namespace cdlib
         }
 
         // The origin is inside the tetrahedron
-        return GJK2State::COLLISION;
+        return GJKState::COLLISION;
+    }
+
+    CollisionData GJK::raycast(const Ray& ray, const ColliderP& collider) {
+        // Clip the ray against the AABB of the collider
+        const auto aabb_raycast = collider->get_aabb().raycast(ray);
+        if (!aabb_raycast.has_value()){
+            return {false};
+        }
+
+        // We create a new ray with the clipped t values
+        const auto clipped_ray = ray.clip(aabb_raycast.value().first, aabb_raycast.value().second);
+
+        auto ray_collider = std::make_shared<RayCollider>(clipped_ray);
+        auto gjk = GJK(collider, ray_collider);
+        return gjk.get_collision_data();
     }
 
     /********************
      * GJKEPA
      ********************/
 
-    CollisionData GJK2EPA::calculate_collision_data() {
-        if (state == GJK2State::NO_COLLISION){
+    CollisionData GJKEPA::calculate_collision_data() {
+        if (state == GJKState::NO_COLLISION){
             return CollisionData{ false };
         }
 
@@ -220,44 +235,50 @@ namespace cdlib
         return get_epa_data();
     }
 
-    CollisionData GJK2EPA::get_epa_data() const
+    CollisionData GJKEPA::get_epa_data() const
     {
         EPA epa(collider_1, collider_2, simplex);
         return epa.get_collision_data();
+    }
+
+    CollisionData GJKEPA::raycast(const Ray& ray, const ColliderP& collider) {
+        auto ray_collider = std::make_shared<RayCollider>(ray);
+        auto gjk = GJKEPA(collider, ray_collider);
+        return gjk.get_collision_data();
     }
 
     /********************
      * Steppable GJK
      ********************/
 
-    CollisionData SteppableGJK2::calculate_collision_data()
+    CollisionData SteppableGJK::calculate_collision_data()
     {
-        result = GJK2::calculate_collision_data();
+        result = GJK::calculate_collision_data();
         return result;
     }
 
-    GJK2State SteppableGJK2::step()
+    GJKState SteppableGJK::step()
     {
-        const auto next_state = GJK2::step();
-        if (next_state == GJK2State::NO_COLLISION)
+        const auto next_state = GJK::step();
+        if (next_state == GJKState::NO_COLLISION)
         {
             result = CollisionData{ false };
-            state = GJK2State::NO_COLLISION;
-            return GJK2State::NO_COLLISION;
+            state = GJKState::NO_COLLISION;
+            return GJKState::NO_COLLISION;
         }
-        if (state == GJK2State::COLLISION){
+        if (state == GJKState::COLLISION){
             result = CollisionData{ true };
-            state = GJK2State::COLLISION;
-            return GJK2State::COLLISION;
+            state = GJKState::COLLISION;
+            return GJKState::COLLISION;
         }
 
         state = next_state;
         return next_state;
     }
 
-    GJK2State SteppableGJK2::initialize()
+    GJKState SteppableGJK::initialize()
     {
-        if (const auto base = GJK2::initialize(); base != GJK2State::CONTINUE){
+        if (const auto base = GJK::initialize(); base != GJKState::CONTINUE){
             return base;
         }
 
@@ -265,23 +286,23 @@ namespace cdlib
         current_point_b = simplex_obj_2[0];
         current_new_point = simplex[0];
 
-        return GJK2State::CONTINUE;
+        return GJKState::CONTINUE;
     }
 
-    GJK2State SteppableGJK2::get_next_point() {
+    GJKState SteppableGJK::get_next_point() {
         const auto support_point = get_support_point(direction);
 
         current_new_point = support_point;
         current_point_a = collider_1->support(direction);
         current_point_b = collider_2->support(-direction);
 
-        return GJK2State::UPDATE_SIMPLEX;
+        return GJKState::UPDATE_SIMPLEX;
     }
 
-    GJK2State SteppableGJK2::get_next_simplex() {
+    GJKState SteppableGJK::get_next_simplex() {
         if(!passed_origin(current_new_point))
         {
-            return GJK2State::NO_COLLISION;
+            return GJKState::NO_COLLISION;
         }
 
         insert_simplex_point(current_new_point);
@@ -293,34 +314,34 @@ namespace cdlib
         return next_state;
     }
 
-    GJK2State SteppableGJK2::execute_iteration()
+    GJKState SteppableGJK::execute_iteration()
     {
-        if (state == GJK2State::CONTINUE){
+        if (state == GJKState::CONTINUE){
             return get_next_point();
         }
-        if (state == GJK2State::UPDATE_SIMPLEX){
+        if (state == GJKState::UPDATE_SIMPLEX){
             return get_next_simplex();
         }
-        return GJK2State::ERROR;
+        return GJKState::ERROR;
     }
 
-    void SteppableGJK2::set_simplex_indices(const std::initializer_list<size_t> indices)
+    void SteppableGJK::set_simplex_indices(const std::initializer_list<size_t> indices)
     {
-        GJK2::set_simplex_indices(indices);
+        GJK::set_simplex_indices(indices);
         simplex_obj_1.reorder(indices);
         simplex_obj_2.reorder(indices);
     }
 
-    void SteppableGJK2::insert_simplex_point(const glm::vec3& point)
+    void SteppableGJK::insert_simplex_point(const glm::vec3& point)
     {
-        GJK2::insert_simplex_point(point);
+        GJK::insert_simplex_point(point);
         simplex_obj_1.insert(collider_1->support(direction));
         simplex_obj_2.insert(collider_2->support(-direction));
     }
 
-    void SteppableGJK2::reset()
+    void SteppableGJK::reset()
     {
-        GJK2::reset();
+        GJK::reset();
         current_point_a = glm::vec3(0.f);
         current_point_b = glm::vec3(0.f);
         current_new_point = glm::vec3(0.f);
@@ -335,14 +356,14 @@ namespace cdlib
      * Steppable GJKEPA
      ********************/
 
-    GJK2State SteppableGJK2EPA::step()
+    GJKState SteppableGJK2EPA::step()
     {
-        if (state == GJK2State::COLLISION){
+        if (state == GJKState::COLLISION){
             result = get_epa_data();
-            state = GJK2State::EPA_FINISHED;
-            return GJK2State::EPA_FINISHED;
+            state = GJKState::EPA_FINISHED;
+            return GJKState::EPA_FINISHED;
         }
-        return SteppableGJK2::step();
+        return SteppableGJK::step();
     }
 
     CollisionData SteppableGJK2EPA::get_epa_data() const
@@ -353,7 +374,7 @@ namespace cdlib
 
     CollisionData SteppableGJK2EPA::calculate_collision_data()
     {
-        if (state == GJK2State::NO_COLLISION){
+        if (state == GJKState::NO_COLLISION){
             result = CollisionData{ false };
             return result;
         }

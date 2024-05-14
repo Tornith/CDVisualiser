@@ -10,7 +10,7 @@
 #include "voronoi.hpp"
 
 namespace cdlib {
-    enum class GJK2State {
+    enum class GJKState {
         INIT,
         CONTINUE,
         UPDATE_SIMPLEX,
@@ -20,25 +20,25 @@ namespace cdlib {
         ERROR
     };
 
-    class GJK2 : public NarrowCollisionDetector {
+    class GJK : public NarrowCollisionDetector {
     protected:
-        GJK2State state = GJK2State::INIT;
+        GJKState state = GJKState::INIT;
 
         Simplex simplex{};
         glm::vec3 direction{};
 
     public:
-        GJK2() = default;
+        GJK() = default;
 
-        GJK2(ColliderP collider_1, ColliderP collider_2)
+        GJK(ColliderP collider_1, ColliderP collider_2)
             : NarrowCollisionDetector(std::move(collider_1), std::move(collider_2)) {
         }
 
-        GJK2(const GJK2& other) = default;
+        GJK(const GJK& other) = default;
 
-        GJK2(GJK2&& other) noexcept : NarrowCollisionDetector(std::move(other.collider_1), std::move(other.collider_2)) {}
+        GJK(GJK&& other) noexcept : NarrowCollisionDetector(std::move(other.collider_1), std::move(other.collider_2)) {}
 
-        GJK2& operator=(const GJK2& other) {
+        GJK& operator=(const GJK& other) {
             if (this == &other)
                 return *this;
             collider_1 = other.collider_1;
@@ -46,7 +46,7 @@ namespace cdlib {
             return *this;
         }
 
-        GJK2& operator=(GJK2&& other) noexcept {
+        GJK& operator=(GJK&& other) noexcept {
             if (this == &other)
                 return *this;
             collider_1 = std::move(other.collider_1);
@@ -54,11 +54,11 @@ namespace cdlib {
             return *this;
         }
 
-        [[nodiscard]] GJK2State get_state() const {
+        [[nodiscard]] GJKState get_state() const {
             return state;
         }
 
-        ~GJK2() override = default;
+        ~GJK() override = default;
 
         [[nodiscard]] glm::vec3 get_support_point(const glm::vec3& direction) const;
 
@@ -70,42 +70,46 @@ namespace cdlib {
         virtual void insert_simplex_point(const glm::vec3& point);
 
         // States
-        [[nodiscard]] virtual GJK2State initialize();
-        [[nodiscard]] virtual GJK2State execute_iteration();
+        [[nodiscard]] virtual GJKState initialize();
+        [[nodiscard]] virtual GJKState execute_iteration();
 
-        [[nodiscard]] virtual GJK2State step();
+        [[nodiscard]] virtual GJKState step();
 
         virtual void reset();
 
         [[nodiscard]] bool passed_origin(const glm::vec3& support) const;
 
-        [[nodiscard]] GJK2State update_simplex();
+        [[nodiscard]] GJKState update_simplex();
 
-        [[nodiscard]] virtual GJK2State update_line_simplex();
-        [[nodiscard]] virtual GJK2State update_triangle_simplex();
-        [[nodiscard]] virtual GJK2State update_tetrahedron_simplex();
+        [[nodiscard]] virtual GJKState update_line_simplex();
+        [[nodiscard]] virtual GJKState update_triangle_simplex();
+        [[nodiscard]] virtual GJKState update_tetrahedron_simplex();
 
         [[nodiscard]] CollisionData get_collision_data() override;
         [[nodiscard]] virtual CollisionData calculate_collision_data();
+
+        static CollisionData raycast(const Ray& ray, const ColliderP& collider);
     };
 
-    class GJK2EPA : public GJK2 {
+    class GJKEPA : public GJK {
     public:
-        GJK2EPA() = default;
+        GJKEPA() = default;
 
-        GJK2EPA(const ColliderP& collider_1, const ColliderP& collider_2)
-            : GJK2(collider_1, collider_2)
+        GJKEPA(const ColliderP& collider_1, const ColliderP& collider_2)
+            : GJK(collider_1, collider_2)
         {}
 
-        GJK2EPA(const GJK2EPA& other) = default;
-        GJK2EPA(GJK2EPA&& other) noexcept = default;
+        GJKEPA(const GJKEPA& other) = default;
+        GJKEPA(GJKEPA&& other) noexcept = default;
 
         [[nodiscard]] CollisionData get_epa_data() const;
 
         [[nodiscard]] CollisionData calculate_collision_data() override;
+
+        static CollisionData raycast(const Ray& ray, const ColliderP& collider);
     };
 
-    class SteppableGJK2 : public GJK2 {
+    class SteppableGJK : public GJK {
     protected:
         glm::vec3 current_point_a = glm::vec3(std::numeric_limits<float>::infinity());
         glm::vec3 current_point_b = glm::vec3(std::numeric_limits<float>::infinity());
@@ -117,8 +121,8 @@ namespace cdlib {
         CollisionData result{};
 
     public:
-        SteppableGJK2() = default;
-        SteppableGJK2(ColliderP collider_1, ColliderP collider_2) : GJK2(std::move(collider_1), std::move(collider_2)) {}
+        SteppableGJK() = default;
+        SteppableGJK(ColliderP collider_1, ColliderP collider_2) : GJK(std::move(collider_1), std::move(collider_2)) {}
 
         [[nodiscard]] glm::vec3 get_current_point_a() const { return current_point_a; }
         [[nodiscard]] glm::vec3 get_current_point_b() const { return current_point_b; }
@@ -129,10 +133,10 @@ namespace cdlib {
 
         [[nodiscard]] glm::vec3 get_direction() const { return direction; }
 
-        [[nodiscard]] virtual bool get_finished() const { return state == GJK2State::COLLISION || state == GJK2State::NO_COLLISION; }
-        [[nodiscard]] bool is_colliding() const { return state == GJK2State::COLLISION; }
+        [[nodiscard]] virtual bool get_finished() const { return state == GJKState::COLLISION || state == GJKState::NO_COLLISION; }
+        [[nodiscard]] bool is_colliding() const { return state == GJKState::COLLISION; }
 
-        [[nodiscard]] virtual GJK2State get_current_state() const { return state; }
+        [[nodiscard]] virtual GJKState get_current_state() const { return state; }
         [[nodiscard]] virtual CollisionData get_result() const { return result; }
 
         void set_simplex_indices(std::initializer_list<size_t> indices) override;
@@ -140,24 +144,24 @@ namespace cdlib {
 
         void reset() override;
 
-        [[nodiscard]] GJK2State step() override;
-        [[nodiscard]] GJK2State get_next_point();
-        [[nodiscard]] GJK2State get_next_simplex();
+        [[nodiscard]] GJKState step() override;
+        [[nodiscard]] GJKState get_next_point();
+        [[nodiscard]] GJKState get_next_simplex();
 
-        [[nodiscard]] GJK2State initialize() override;
-        [[nodiscard]] GJK2State execute_iteration() override;
+        [[nodiscard]] GJKState initialize() override;
+        [[nodiscard]] GJKState execute_iteration() override;
 
         [[nodiscard]] CollisionData calculate_collision_data() override;
     };
 
-    class SteppableGJK2EPA : public SteppableGJK2 {
+    class SteppableGJK2EPA : public SteppableGJK {
     public:
         SteppableGJK2EPA() = default;
-        SteppableGJK2EPA(ColliderP collider_1, ColliderP collider_2) : SteppableGJK2(std::move(collider_1), std::move(collider_2)) {}
+        SteppableGJK2EPA(ColliderP collider_1, ColliderP collider_2) : SteppableGJK(std::move(collider_1), std::move(collider_2)) {}
 
-        [[nodiscard]] GJK2State step() override;
+        [[nodiscard]] GJKState step() override;
         [[nodiscard]] CollisionData get_epa_data() const;
         [[nodiscard]] CollisionData calculate_collision_data() override;
-        [[nodiscard]] bool get_finished() const override { return state == GJK2State::NO_COLLISION || state == GJK2State::EPA_FINISHED; }
+        [[nodiscard]] bool get_finished() const override { return state == GJKState::NO_COLLISION || state == GJKState::EPA_FINISHED; }
     };
 }

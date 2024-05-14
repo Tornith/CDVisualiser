@@ -8,6 +8,14 @@
 #include "collision_data.hpp"
 
 namespace cdlib {
+    struct RayCastResult {
+        bool hit;
+        ColliderP collider;
+        glm::vec3 hit_point;
+        glm::vec3 hit_normal;
+        float distance;
+    };
+
     // Abstract class for different collision detection methods
     class NarrowCollisionDetector {
     protected:
@@ -25,6 +33,11 @@ namespace cdlib {
 
         // Detects collision between two objects
         [[nodiscard]] virtual CollisionData get_collision_data() = 0;
+
+        // Raycast
+        static RayCastResult raycast(const Ray& ray, const ColliderP& collider) {
+            return {};
+        };
     };
 
     struct CollisionPair {
@@ -69,5 +82,10 @@ namespace cdlib {
 
         // Detects returns a list of pairs of colliding objects
         [[nodiscard]] virtual CollisionSet get_collisions() = 0;
+
+        [[nodiscard]] virtual std::set<RayCastResult> raycast(const Ray& ray) = 0;
+        [[nodiscard]] virtual std::set<RayCastResult> raycast(const glm::vec3& origin, const glm::vec3& direction) {
+            return raycast(Ray(origin, direction));
+        }
     };
 }

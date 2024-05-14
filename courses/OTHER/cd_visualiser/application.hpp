@@ -148,6 +148,7 @@ protected:
 
     // Debug
     bool show_time_taken = false;
+    int invalid_ray_casts = 0;
 
 public:
     Application(int initial_width, int initial_height, std::vector<std::string> arguments = {});
@@ -173,7 +174,7 @@ public:
     void start_step_by_step_collision_detection();
     void step_collision_detection();
     void stop_step_by_step_collision_detection();
-    void gjk_step_visualize(cdlib::GJK2State state);
+    void gjk_step_visualize(cdlib::GJKState state);
 
     void perform_bruteforce_test();
 

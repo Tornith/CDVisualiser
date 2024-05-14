@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "collision_detector.hpp"
+#include "ray.hpp"
 
 namespace cdlib {
     class AABBTree final : public BroadCollisionDetector {
@@ -106,7 +107,7 @@ namespace cdlib {
         void query_aabb(const AABB& aabb, const QueryCallback& callback);
         void query_ray(const AABBTreeRaycast& input, const RayCallback& callback);
 
-        std::vector<ColliderP> raycast(const glm::vec3& origin, const glm::vec3& direction);
+        [[nodiscard]] std::set<ColliderP> raycast(const Ray& ray) override;
 
     private:
         std::shared_ptr<Node> create_node(const ColliderP& collider);

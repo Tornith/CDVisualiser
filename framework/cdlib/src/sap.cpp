@@ -75,7 +75,7 @@ namespace cdlib {
                 prev = nullptr;
                 while (current != nullptr && current->value[axis] < max_endpoint->value[axis]) {
                     // Check for potential overlap
-                    if (current->is_min && current->collider != collider && collider->get_aabb().intersects(current->get_aabb())) {
+                    if (current->is_min && current->collider != collider && max_endpoint->get_aabb().intersects(current->get_aabb())) {
                         collisions.insert({collider, current->collider});
                     }
 
@@ -158,100 +158,148 @@ namespace cdlib {
         auto [min_endpoint, max_endpoint] = endpoint_map[collider];
 
         // Update the value of the endpoints
-        const auto [min, max] = collider->get_aabb();
+        const auto aabb = collider->get_aabb();
+        const auto [min, max] = aabb;
         min_endpoint->value = min;
         max_endpoint->value = max;
 
         // For each axis, update the value of the endpoints
         for (int axis = 0; axis < 3; axis++) {
-            EndpointP current = nullptr;
-            EndpointP prev = nullptr;
+            // EndpointP current = nullptr;
+            // EndpointP prev = nullptr;
+            //
+            // // Move min endpoint to the left
+            // for (current = min_endpoint->prev[axis]; current != nullptr && current->value[axis] > min_endpoint->value[axis]; current = current->prev[axis]) {
+            //     if (!current->is_min && collider != current->collider && aabb.intersects(current->get_aabb())) {
+            //         collisions.insert({collider, current->collider});
+            //     }
+            // }
+            //
+            // if (current != min_endpoint->prev[axis]) {
+            //     move_endpoint(axis, min_endpoint, current);
+            // }
+            //
+            // // Move max endpoint to the right
+            // prev = max_endpoint;
+            // for (current = max_endpoint->next[axis]; current != nullptr && current->value[axis] < max_endpoint->value[axis]; current = current->next[axis]) {
+            //     if (current->is_min && collider != current->collider && aabb.intersects(current->get_aabb())) {
+            //         collisions.insert({collider, current->collider});
+            //     }
+            //
+            //     prev = current;
+            // }
+            //
+            // if (current != max_endpoint->next[axis]) {
+            //     move_endpoint(axis, min_endpoint, prev);
+            // }
+            //
+            // // Move min endpoint to the right
+            // prev = min_endpoint;
+            // for (current = min_endpoint->next[axis]; current != nullptr && current->value[axis] < min_endpoint->value[axis]; current = current->next[axis]) {
+            //     if (!current->is_min) {
+            //         collisions.erase({collider, current->collider});
+            //     }
+            //
+            //     prev = current;
+            // }
+            //
+            // if (current != min_endpoint->next[axis]) {
+            //     move_endpoint(axis, min_endpoint, prev);
+            // }
+            //
+            // // Move max endpoint to the left
+            // for (current = max_endpoint->prev[axis]; current != nullptr && current->value[axis] > max_endpoint->value[axis]; current = current->prev[axis]) {
+            //     if (current->is_min) {
+            //         collisions.erase({collider, current->collider});
+            //     }
+            // }
+            //
+            // if (current != max_endpoint->prev[axis]) {
+            //     move_endpoint(axis, max_endpoint, current);
+            // }
 
             // Move min endpoint to the left
-            for (current = min_endpoint->prev[axis]; current != nullptr && current->value[axis] > min_endpoint->value[axis]; current = current->prev[axis]) {
-                if (!current->is_min && collider != current->collider && collider->get_aabb().intersects(current->get_aabb())) {
-                    collisions.insert({collider, current->collider});
+            while(min_endpoint->prev[axis] != nullptr && min_endpoint->value[axis] < min_endpoint->prev[axis]->value[axis]) {
+                // Check for potential overlap
+                if (!min_endpoint->prev[axis]->is_min) {
+                    if (aabb.intersects(min_endpoint->prev[axis]->get_aabb())) {
+                        collisions.insert({collider, min_endpoint->prev[axis]->collider});
+                    }
                 }
-            }
-
-            if (current != min_endpoint->prev[axis]) {
-                move_endpoint(axis, min_endpoint, current);
+                swap_endpoints(axis, min_endpoint, true);
             }
 
             // Move max endpoint to the right
-            prev = nullptr;
-            for (current = max_endpoint->next[axis]; current != nullptr && current->value[axis] < max_endpoint->value[axis]; current = current->next[axis]) {
-                if (current->is_min && collider != current->collider && collider->get_aabb().intersects(current->get_aabb())) {
-                    collisions.insert({collider, current->collider});
+            while(max_endpoint->next[axis] != nullptr && max_endpoint->value[axis] > max_endpoint->next[axis]->value[axis]) {
+                // Check for potential overlap
+                if (max_endpoint->next[axis]->is_min) {
+                    if (aabb.intersects(max_endpoint->next[axis]->get_aabb())) {
+                        collisions.insert({collider, max_endpoint->next[axis]->collider});
+                    }
                 }
-
-                prev = current;
-            }
-
-            if (current != max_endpoint->next[axis]) {
-                move_endpoint(axis, min_endpoint, prev);
+                swap_endpoints(axis, max_endpoint, false);
             }
 
             // Move min endpoint to the right
-            prev = nullptr;
-            for (current = min_endpoint->next[axis]; current != nullptr && current->value[axis] < min_endpoint->value[axis]; current = current->next[axis]) {
-                if (!current->is_min) {
-                    collisions.erase({collider, current->collider});
+            while(min_endpoint->next[axis] != nullptr && min_endpoint->value[axis] > min_endpoint->next[axis]->value[axis]) {
+                // Remove any potential collision
+                if (!min_endpoint->next[axis]->is_min) {
+                    collisions.erase({collider, min_endpoint->next[axis]->collider});
                 }
-
-                prev = current;
-            }
-
-            if (current != min_endpoint->next[axis]) {
-                move_endpoint(axis, min_endpoint, prev);
+                swap_endpoints(axis, min_endpoint, false);
             }
 
             // Move max endpoint to the left
-            for (current = max_endpoint->prev[axis]; current != nullptr && current->value[axis] > max_endpoint->value[axis]; current = current->prev[axis]) {
-                if (current->is_min) {
-                    collisions.erase({collider, current->collider});
+            while(max_endpoint->prev[axis] != nullptr && max_endpoint->value[axis] < max_endpoint->prev[axis]->value[axis]) {
+                // Remove any potential collision
+                if (max_endpoint->prev[axis]->is_min) {
+                    collisions.erase({collider, max_endpoint->prev[axis]->collider});
                 }
-            }
-
-            if (current != max_endpoint->prev[axis]) {
-                move_endpoint(axis, max_endpoint, current);
+                swap_endpoints(axis, max_endpoint, true);
             }
         }
     }
 
-    void SAP::move_endpoint(const size_t axis, const EndpointP& endpoint, const EndpointP& dest) {
-        // Check if the endpoint is already in the correct position
-        if (endpoint->prev[axis] == dest || endpoint == dest) {
+    void SAP::swap_endpoints(size_t axis, const EndpointP& endpoint, bool left) {
+        // Check if the endpoint is at the beginning or end of the list
+        if ((left && endpoint->prev[axis] == nullptr) || (!left && endpoint->next[axis] == nullptr)) {
             return;
         }
 
-        // Unlink the original
-        if (endpoint->prev[axis] != nullptr) {
-            endpoint->prev[axis]->next[axis] = endpoint->next[axis];
-        } else {
-            list_heads[axis] = endpoint->next[axis];
+        // Get the endpoint to swap with
+        const auto other = left ? endpoint->prev[axis] : endpoint->next[axis];
+
+        if (endpoint == other) {
+            return;
         }
+
+        if (endpoint == list_heads[axis]) {
+            list_heads[axis] = other;
+        } else if (other == list_heads[axis]) {
+            list_heads[axis] = endpoint;
+        }
+
+        EndpointP temp;
+        temp = endpoint->next[axis];
+        endpoint->next[axis] = other->next[axis];
+        other->next[axis] = temp;
 
         if (endpoint->next[axis] != nullptr) {
-            endpoint->next[axis]->prev[axis] = endpoint->prev[axis];
+            endpoint->next[axis]->prev[axis] = endpoint;
+        }
+        if (other->next[axis] != nullptr) {
+            other->next[axis]->prev[axis] = other;
         }
 
-        // If dest is nullptr, we are moving the endpoint to the beginning of the list
-        if (dest == nullptr) {
-            endpoint->prev[axis] = nullptr;
-            endpoint->next[axis] = list_heads[axis];
-            if (list_heads[axis] != nullptr) {
-                list_heads[axis]->prev[axis] = endpoint;
-            }
-            list_heads[axis] = endpoint;
-        } else {
-            // Link the endpoint to the new position
-            endpoint->prev[axis] = dest;
-            endpoint->next[axis] = dest->next[axis];
-            if (dest->next[axis] != nullptr) {
-                dest->next[axis]->prev[axis] = endpoint;
-            }
-            dest->next[axis] = endpoint;
+        temp = endpoint->prev[axis];
+        endpoint->prev[axis] = other->prev[axis];
+        other->prev[axis] = temp;
+
+        if (endpoint->prev[axis] != nullptr) {
+            endpoint->prev[axis]->next[axis] = endpoint;
+        }
+        if (other->prev[axis] != nullptr) {
+            other->prev[axis]->next[axis] = other;
         }
     }
 
@@ -304,5 +352,32 @@ namespace cdlib {
             std::cout << "Prev: " << endpoints.first->prev[0] << ", " << endpoints.first->prev[1] << ", " << endpoints.first->prev[2] << std::endl;
             std::cout << std::endl;
         }
+    }
+
+    std::set<ColliderP> SAP::raycast(const Ray& ray) {
+        const auto start = ray.from();
+        const auto end = ray.to();
+
+        // Create AABB for the ray
+        const auto ray_aabb = AABB{min(start, end), max(start, end)};
+
+        // Find the axis with the largest span
+        const auto span = ray_aabb.get_extent();
+        const auto axis = span.x > span.y ? (span.x > span.z ? 0 : 2) : (span.y > span.z ? 1 : 2);
+
+        // Walk the list of endpoints
+        auto current = list_heads[axis];
+        std::set<ColliderP> colliders;
+        while (current != nullptr && current->value[axis] < ray_aabb.max[axis]) {
+            // Check if the ray intersects the AABB of the endpoint
+            if (current->is_min && current->get_aabb().raycast(start, end, 0.0f, 1.0f).has_value()) {
+                colliders.insert(current->collider);
+            }
+
+            // Move to the next endpoint
+            current = current->next[axis];
+        }
+
+        return colliders;
     }
 }
