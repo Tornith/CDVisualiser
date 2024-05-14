@@ -3,6 +3,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "aabb.hpp"
 #include "collision_detector.hpp"
 
 namespace cdlib {
@@ -12,6 +13,12 @@ namespace cdlib {
         std::array<std::shared_ptr<Endpoint>, 3> next;
         glm::vec3 value;
         bool is_min;
+
+        std::shared_ptr<Endpoint> other_endpoint;
+
+        [[nodiscard]] AABB get_aabb() const {
+            return AABB(is_min ? value : other_endpoint->value, is_min ? other_endpoint->value : value);
+        }
     };
 
     using EndpointP = std::shared_ptr<Endpoint>;
@@ -41,6 +48,8 @@ namespace cdlib {
         void remove(const ColliderP& collider) override;
 
         [[nodiscard]] CollisionSet get_collisions() override;
+
+
 
         // Debug print lists
         void print_lists() const;

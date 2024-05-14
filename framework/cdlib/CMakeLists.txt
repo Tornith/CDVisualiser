@@ -22,23 +22,25 @@ target_sources(
         include/collision_data.hpp
         include/utils.hpp
 
+        include/aabb.hpp
+
         include/convex_polyhedron.hpp
         src/convex_polyhedron.cpp
 
         include/voronoi.hpp
         src/voronoi.cpp
 
-        include/gjk.hpp
         include/gjk2.hpp
         include/epa.hpp
         include/sap.hpp
         include/vclip.hpp
+        include/aabb_tree.hpp
         include/bruteforce.hpp
 
-        src/gjk.cpp
         src/gjk2.cpp
         src/epa.cpp
         src/sap.cpp
         src/vclip.cpp
+        src/aabb_tree.cpp
         src/bruteforce.cpp
 )

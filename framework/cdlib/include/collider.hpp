@@ -3,24 +3,11 @@
 #include <ranges>
 #include <vector>
 #include <glm/glm.hpp>
+
+#include "aabb.hpp"
 #include "convex_polyhedron.hpp"
 
 namespace cdlib {
-    struct AABB {
-        glm::vec3 min;
-        glm::vec3 max;
-
-        bool operator==(const AABB& other) const {
-            return min == other.min && max == other.max;
-        }
-
-        [[nodiscard]] bool intersects(const AABB& other) const {
-            return min.x <= other.max.x && max.x >= other.min.x &&
-                   min.y <= other.max.y && max.y >= other.min.y &&
-                   min.z <= other.max.z && max.z >= other.min.z;
-        }
-    };
-
     class Collider {
     protected:
         std::shared_ptr<ConvexPolyhedron> shape;

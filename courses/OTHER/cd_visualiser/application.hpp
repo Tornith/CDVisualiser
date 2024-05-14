@@ -1,4 +1,5 @@
 #pragma once
+#include "aabb_tree.hpp"
 #include "bruteforce.hpp"
 #include "camera_ubo.hpp"
 #include "light_ubo.hpp"
@@ -137,11 +138,13 @@ protected:
     // AABBs
     std::vector<SceneObject> aabb_objects;
 
+    cdlib::CollisionSet broadphase_collisions;
+
     // AABBTREE Specific
+    cdlib::AABBTree aabb_tree;
 
     // SAP Specific
     cdlib::SAP sap;
-    cdlib::CollisionSet sap_collisions;
 
     // Debug
     bool show_time_taken = false;
@@ -172,7 +175,7 @@ public:
     void stop_step_by_step_collision_detection();
     void gjk_step_visualize(cdlib::GJK2State state);
 
-    void perform_bruteforce_test() const;
+    void perform_bruteforce_test();
 
     static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& from, const glm::vec3& to);
     static std::shared_ptr<Geometry> create_line_geometry(const glm::vec3& origin, const glm::vec3& direction, float length);
