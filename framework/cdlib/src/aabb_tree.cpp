@@ -348,16 +348,16 @@ namespace cdlib {
                 auto left_distance = left->aabb.raycast(from, to, 0.0f, max_fraction);
                 auto right_distance = right->aabb.raycast(from, to, 0.0f, max_fraction);
 
-                if (right_distance < left_distance) {
+                if (right_distance.t_min < left_distance.t_min) {
                     std::swap(left, right);
                     std::swap(left_distance, right_distance);
                 }
 
-                if (!left_distance.has_value()) {
+                if (!left_distance.hit) {
                     continue;
                 }
 
-                if (right_distance.has_value()) {
+                if (right_distance.hit) {
                     stack.push(right);
                 }
                 stack.push(left);
@@ -535,12 +535,19 @@ namespace cdlib {
         }
     }
 
-    std::set<ColliderP> AABBTree::raycast(const Ray& ray) {
+    RayCastResultSet AABBTree::raycast(const Ray& ray) {
         const auto input = AABBTreeRaycast{ ray.from(), ray.to(), 1.0f};
-        std::set<ColliderP> colliders;
+        RayCastResultSet colliders;
 
-        query_ray(input, [&colliders](const AABBTreeRaycast& raycast, const ColliderP& collider) {
-            colliders.insert(collider);
+        query_ray(input, [&colliders, ray](const AABBTreeRaycast& raycast, const ColliderP& collider) {
+            const auto point = ray.at(raycast.max_fraction);
+            colliders.insert({
+                true,
+                collider,
+                point,
+                glm::vec3(0.0f),
+                distance(ray.from(), point)
+            });
             return raycast.max_fraction;
         });
 

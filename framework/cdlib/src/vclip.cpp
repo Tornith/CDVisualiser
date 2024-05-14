@@ -617,7 +617,23 @@ namespace cdlib
         return CONTINUE;
     }
 
-    CollisionData VClip::raycast(const Ray& ray, const ColliderP& collider) {
-        return VClipRaycast(collider, ray).get_collision_data();
+    RayCastResult VClip::raycast(const Ray& ray, const ColliderP& collider) {
+        const auto [is_colliding, normal, depth, feature_1, feature_2] = VClipRaycast(collider, ray).get_collision_data();
+        if (is_colliding){
+            // If we are coliding, the feature has to be a face -> calculate collision between the ray and the face
+            const auto face = std::dynamic_pointer_cast<Face>(feature_1);
+            glm::vec3 point;
+            Ray::intersects_triangle(
+                ray,
+                face->get_vertices()[0]->get_position(),
+                face->get_vertices()[1]->get_position(),
+                face->get_vertices()[2]->get_position(),
+                point
+            );
+            return { true, collider, point, normal, glm::distance(ray.origin, point) };
+        }
+        return {
+
+        };
     }
 }

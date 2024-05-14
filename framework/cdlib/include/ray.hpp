@@ -19,6 +19,10 @@ namespace cdlib{
             return origin + direction * distance;
         }
 
+        [[nodiscard]] glm::vec3 at(const float t) const {
+            return origin + direction * t * distance;
+        }
+
         [[nodiscard]] Ray clip(const float t_min, const float t_max) const {
             const auto new_origin = origin + direction * t_min * distance;
             const auto new_end = origin + direction * t_max * distance;

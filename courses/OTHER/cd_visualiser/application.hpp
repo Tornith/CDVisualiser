@@ -54,6 +54,9 @@ protected:
     // Vector of pairs of direction and their origin
     std::vector<std::pair<glm::vec3, glm::vec3>> direction_highlights;
     std::vector<SceneObject> direction_highlight_objects;
+    std::vector<glm::vec3> point_highlights;
+    std::vector<SceneObject> point_highlight_objects;
+
 
     // World Axis
     SceneObject world_axis_x;

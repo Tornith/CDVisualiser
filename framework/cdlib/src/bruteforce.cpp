@@ -181,20 +181,20 @@ namespace cdlib {
         return collisions;
     }
 
-    std::set<ColliderP> NarrowBruteforce::raycast(const Ray& ray, const std::set<ColliderP>& colliders) {
+    RayCastResultSet NarrowBruteforce::raycast(const Ray& ray, const std::set<ColliderP>& colliders) {
         // Check if the ray intersects with any collider's triangle
-        std::set<ColliderP> hits;
+        RayCastResultSet hits;
         for (const auto& collider : colliders){
             const auto result = raycast(ray, collider);
-            if (result.is_colliding){
-                hits.insert(collider);
+            if (result.hit){
+                hits.insert(result);
             }
         }
 
         return hits;
     }
 
-    CollisionData NarrowBruteforce::raycast(const Ray& ray, const ColliderP& collider) {
+    RayCastResult NarrowBruteforce::raycast(const Ray& ray, const ColliderP& collider) {
         const auto faces = collider->get_shape()->get_faces();
         for (const auto& face : faces){
             const auto vertices = face->get_vertices();
@@ -211,18 +211,26 @@ namespace cdlib {
                 vertex_2,
                 point
             )){
-                return CollisionData(true);
+                return RayCastResult(true, collider, point, face->get_plane().normal, glm::distance(ray.origin, point));
             }
         }
-        return CollisionData(false);
+        return RayCastResult(false);
     }
 
-    std::set<ColliderP> BroadBruteforce::raycast(const Ray& ray) {
+    RayCastResultSet BroadBruteforce::raycast(const Ray& ray) {
         // For each collider, check if the ray intersects the collider's AABB
-        std::set<ColliderP> hits;
+        RayCastResultSet hits;
         for (const auto& collider : colliders){
-            if (collider->get_aabb().raycast(ray).has_value()){
-                hits.insert(collider);
+            const auto aabb_raycast = collider->get_aabb().raycast(ray);
+            if (aabb_raycast.hit){
+                const auto point = ray.at(aabb_raycast.t_min);
+                hits.insert({
+                    true,
+                    collider,
+                    point,
+                    aabb_raycast.t_min_normal,
+                    distance(ray.origin, point)
+                });
             }
         }
         return hits;

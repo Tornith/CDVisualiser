@@ -245,7 +245,7 @@ void Application::recalculate_minkowski_difference() {
         return;
     }
 
-    auto pm = get_minkowski_difference_positions(object_1->collider->get_global_vertices(), raycasting ? raycast_collider->get_global_vertices() : object_2->collider->get_global_vertices());
+    auto pm = get_minkowski_difference_positions(object_1->collider->get_global_vertices(), object_2->collider->get_global_vertices());
     auto [gm, vm, _] = generate_convex_hull_geometry(pm);
 
     auto mm = glm::mat4(1.0f); // The vertices are already in world space
@@ -516,9 +516,13 @@ void Application::create_vertex_highlight_objects() {
 
 void Application::draw_direction_highlights() {
     direction_highlight_objects.clear();
+    point_highlight_objects.clear();
     for (const auto& [direction, origin] : direction_highlights) {
         auto geometry = create_line_geometry(origin, direction, 1.0f);
         direction_highlight_objects.emplace_back(geometry, ModelUBO(glm::mat4(1.0f)), cyan_material_ubo);
+    }
+    for (const auto& point : point_highlights) {
+        point_highlight_objects.emplace_back(sphere, ModelUBO(scale(translate(glm::mat4(1.0f), point), glm::vec3(0.05f))), cyan_material_ubo);
     }
 }
 
@@ -733,6 +737,10 @@ void Application::render_scene() {
     for (SceneObject& object : direction_highlight_objects) {
         render_object(object, default_unlit_program);
     }
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    for (SceneObject& object : point_highlight_objects) {
+        render_object(object, default_unlit_program);
+    }
     glEnable(GL_CULL_FACE);
 
     glDisable(GL_CULL_FACE);
@@ -770,20 +778,20 @@ void Application::raycast()
 
     // Draw a line from the camera position in the direction of the ray
     direction_highlights.clear();
+    point_highlights.clear();
     direction_highlights.emplace_back(ray_direction, ray_origin);
 
     raycasting = true;
 
     // Perform raycasting
-    std::set<cdlib::ColliderP> hits;
+    cdlib::RayCastResultSet hits;
     if (selected_method == GJK_EPA) {
         for (const auto& convex_object : convex_objects)
         {
-            auto result = cdlib::GJK::raycast(cdlib::Ray(ray_origin, ray_direction), convex_object->collider);
-            const auto [is_colliding, normal, depth, feature_1, feature_2] = result;
-            if (is_colliding)
+            auto result = cdlib::GJKEPA::raycast(cdlib::Ray(ray_origin, ray_direction), convex_object->collider);
+            if (result.hit)
             {
-                hits.insert(convex_object->collider);
+                hits.insert(result);
             }
         }
     }
@@ -791,10 +799,9 @@ void Application::raycast()
         for (const auto& convex_object : convex_objects)
         {
             auto result = cdlib::VClip::raycast(cdlib::Ray(ray_origin, ray_direction), convex_object->collider);
-            const auto [is_colliding, normal, depth, feature_1, feature_2] = result;
-            if (is_colliding)
+            if (result.hit)
             {
-                hits.insert(convex_object->collider);
+                hits.insert(result);
             }
         }
     }
@@ -807,6 +814,13 @@ void Application::raycast()
         hits = aabb_tree.raycast(cdlib::Ray(ray_origin, ray_direction));
     }
 
+    // Highlight the collision points and normals
+    for (const auto& hit : hits)
+    {
+        point_highlights.emplace_back(hit.position);
+        direction_highlights.emplace_back(hit.normal, hit.position);
+    }
+
     std::cout << "Raycast hits: " << hits.size() << std::endl;
 }
 
@@ -816,7 +830,9 @@ void Application::raycast()
 
 void Application::perform_collision_detection() {
     if (selected_method == GJK_EPA) {
-        direction_highlights.clear();
+        if (!auto_calculate_collision) {
+            direction_highlights.clear();
+        }
         direction_highlight_objects.clear();
         gjk.reset();
 
@@ -923,6 +939,7 @@ void Application::stop_step_by_step_collision_detection() {
     simplex_vertex_highlights.clear();
     active_object_vertex_highlights.clear();
     object_vertex_highlights.clear();
+    point_highlights.clear();
     direction_highlights.clear();
     feature_highlights.clear();
 }
@@ -932,8 +949,8 @@ void Application::perform_bruteforce_test() {
         const auto colliders = std::ranges::transform_view(convex_objects, [](std::shared_ptr<ConvexObject>& convex_object) { return convex_object->collider; });
         const auto colliders_vector = std::set<cdlib::ColliderP>(std::begin(colliders), std::end(colliders));
 
-        std::set<cdlib::ColliderP> bruteforce_hits;
-        std::set<cdlib::ColliderP> hits;
+        std::unordered_set<cdlib::ColliderP> bruteforce_hits;
+        std::unordered_set<cdlib::ColliderP> hits;
 
         constexpr int ray_count = 10;
 
@@ -946,13 +963,15 @@ void Application::perform_bruteforce_test() {
 
             if (selected_method == GJK_EPA || selected_method == V_CLIP) {
                 const auto current_bruteforce_hits = cdlib::NarrowBruteforce::raycast(ray, colliders_vector);
-                bruteforce_hits.insert(std::begin(current_bruteforce_hits), std::end(current_bruteforce_hits));
+                for (const auto& hit : current_bruteforce_hits) {
+                    bruteforce_hits.insert(hit.collider);
+                }
 
                 for (const auto& convex_object : convex_objects)
                 {
-                    cdlib::CollisionData result;
+                    cdlib::RayCastResult result;
                     result = selected_method == GJK_EPA ? cdlib::GJK::raycast(ray, convex_object->collider) : cdlib::VClip::raycast(ray, convex_object->collider);
-                    if (result.is_colliding)
+                    if (result.hit)
                     {
                         hits.insert(convex_object->collider);
                     }
@@ -960,13 +979,17 @@ void Application::perform_bruteforce_test() {
             } else {
                 const auto current_bruteforce_hits = cdlib::BroadBruteforce(colliders_vector).raycast(ray);
                 const auto current_hits = selected_method == SAP ? sap.raycast(ray) : aabb_tree.raycast(ray);
-                bruteforce_hits.insert(std::begin(current_bruteforce_hits), std::end(current_bruteforce_hits));
-                hits.insert(std::begin(current_hits), std::end(current_hits));
+                for (const auto& hit : current_bruteforce_hits) {
+                    bruteforce_hits.insert(hit.collider);
+                }
+                for (const auto& hit : current_hits) {
+                    hits.insert(hit.collider);
+                }
             }
         }
 
         std::vector<cdlib::ColliderP> result;
-        std::ranges::set_difference(hits, bruteforce_hits, std::back_inserter(result));
+        std::ranges::set_symmetric_difference(hits, bruteforce_hits, std::back_inserter(result));
 
         // If the hits are not the same, print out the debug message
         if (!result.empty()) {
@@ -982,107 +1005,133 @@ void Application::perform_bruteforce_test() {
             std::cout << hits.size() << "==" << bruteforce_hits.size() << " (Invalid: " << invalid_ray_casts << ")" << std::endl;
         }
     }
-    //
-    // if (selected_method == SAP || selected_method == AABBTREE) {
-    //     auto colliders = std::ranges::transform_view(convex_objects, [](std::shared_ptr<ConvexObject>& convex_object) { return convex_object->collider; });
-    //     const auto colliders_vector = std::set<cdlib::ColliderP>(std::begin(colliders), std::end(colliders));
-    //     auto bruteforce = cdlib::BroadBruteforce(colliders_vector);
-    //
-    //     const auto bruteforce_collisions = bruteforce.get_collisions();
-    //     if (bruteforce_collisions.size() == broadphase_collisions.size()) {
-    //         // Perform a check, if both sets contain the same colliders
-    //         if (std::ranges::all_of(broadphase_collisions, [&bruteforce_collisions](const auto& pair) {
-    //             return std::ranges::any_of(bruteforce_collisions, [&pair](const auto& other) {
-    //                 return pair.contains(other.collider_1) && pair.contains(other.collider_2);
-    //             });
-    //         })) {
-    //             return;
-    //         }
-    //     }
-    //
-    //     // Stop the object moving and rotating
-    //     rotate_and_move_objects = false;
-    //
-    //     std::cerr << "Bruteforce test failed!" << std::endl;
-    //     // Print what colliders are colliding in bruteforce
-    //     std::cout << "Bruteforce collisions: ";
-    //     for (const auto& pair : bruteforce_collisions) {
-    //         // Find the colliders in the colliders_vector array and print their indices as A, B, C, ...
-    //         const auto id1 = static_cast<char>('A' + std::distance(colliders.begin(), std::ranges::find(colliders, pair.collider_1)));
-    //         const auto id2 = static_cast<char>('A' + std::distance(colliders.begin(), std::ranges::find(colliders, pair.collider_2)));
-    //         std::cout << "(" << id1 << id2 << "), ";
-    //     }
-    //     std::cout << std::endl;
-    //
-    //     // Print what colliders are colliding in SAP
-    //     sap.print_lists();
-    // }
-    //
-    // if (selected_method == GJK_EPA || selected_method == V_CLIP) {
-    //     auto bruteforce = cdlib::NarrowBruteforce(object_1->collider, object_2->collider);
-    //     const auto expected_data = bruteforce.get_collision_data();
-    //     if (expected_data.is_colliding == collision_data.is_colliding)
-    //     {
-    //         // If the selected method is V-Clip, check if the features are the same
-    //         if (selected_method == V_CLIP)
-    //         {
-    //             if (collision_data.is_colliding) return; // Don't check the nearest features, since they are not always the same in this case
-    //
-    //             auto check_if_features_equal = [](const cdlib::FeatureP& f1, const cdlib::FeatureP& f2) {
-    //                 if (f1 == nullptr || f2 == nullptr){
-    //                     return false;
-    //                 }
-    //                 if (f1 == f2) return true;
-    //
-    //                 // Check if the features are half_edges, if so check if they are potentially twins
-    //                 if (const auto edge_1 = std::dynamic_pointer_cast<cdlib::HalfEdge>(f1); edge_1 != nullptr){
-    //                     if (const auto edge_2 = std::dynamic_pointer_cast<cdlib::HalfEdge>(f2); edge_2 != nullptr){
-    //                         return edge_1->start == edge_2->end && edge_1->end == edge_2->start;
-    //                     }
-    //                 }
-    //
-    //                 return false;
-    //             };
-    //
-    //             // Check distance difference
-    //             const auto distance = feature_distance(collision_data.feature_1, collision_data.feature_2);
-    //             const auto distance_difference = std::abs(distance - expected_data.depth);
-    //
-    //             // Check if the features are the same (or swapped), considering half-edge twins
-    //             if (check_if_features_equal(collision_data.feature_1, expected_data.feature_1) && check_if_features_equal(collision_data.feature_2, expected_data.feature_2) ||
-    //                check_if_features_equal(collision_data.feature_1, expected_data.feature_2) && check_if_features_equal(collision_data.feature_2, expected_data.feature_1) ||
-    //                distance_difference < 0.001f)
-    //             {
-    //                 return;
-    //             }
-    //             std::cerr << "Distance difference: " << distance_difference << std::endl;
-    //             std::cerr << "Got: " << collision_data.feature_1->to_string() << " - " << collision_data.feature_2->to_string() << std::endl;
-    //             std::cerr << "Expected: " << expected_data.feature_1->to_string() << " - " << expected_data.feature_2->to_string() << std::endl;
-    //             std::cerr << "Collider 1: " << object_1->collider->get_shape()->get_debug_data() << std::endl;
-    //             std::cerr << "Collider 2: " << object_2->collider->get_shape()->get_debug_data() << std::endl;
-    //         }
-    //         else
-    //         {
-    //             return;
-    //         }
-    //     }
-    //
-    //     // Print-out debug message
-    //     std::cerr << std::endl << "Bruteforce test failed!" << std::endl;
-    //     std::cout << "--- Expected data ---" << std::endl;
-    //     std::cout << "Is colliding: " << "Bruteforce: " << expected_data.is_colliding << "   ResultData: " << collision_data.is_colliding << std::endl;
-    //     std::cout << std::endl;
-    //
-    //     std::cout << "--- Positioning ---" << std::endl;
-    //     std::cout << "Collider 1:" << std::endl;
-    //     std::cout << "\tPosition: (" << object_position_1.x << ", " << object_position_1.y << ", " <<  object_position_1.z << ")" << std::endl;
-    //     std::cout << "\tRotation: (" << object_rotation_1.x << ", " << object_rotation_1.y << ", " <<  object_rotation_1.z << ")" << std::endl;
-    //
-    //     std::cout << "Collider 2:" << std::endl;
-    //     std::cout << "\tPosition: (" << object_position_2.x << ", " << object_position_2.y << ", " <<  object_position_2.z << ")" << std::endl;
-    //     std::cout << "\tRotation: (" << object_rotation_2.x << ", " << object_rotation_2.y << ", " <<  object_rotation_2.z << ")" << std::endl;
-    //     std::cout << std::endl;
-    // }
+
+    if (selected_method == SAP || selected_method == AABBTREE) {
+        auto colliders = std::ranges::transform_view(convex_objects, [](std::shared_ptr<ConvexObject>& convex_object) { return convex_object->collider; });
+        const auto colliders_vector = std::set<cdlib::ColliderP>(std::begin(colliders), std::end(colliders));
+        auto bruteforce = cdlib::BroadBruteforce(colliders_vector);
+
+        const auto bruteforce_collisions = bruteforce.get_collisions();
+        if (bruteforce_collisions.size() == broadphase_collisions.size()) {
+            // Perform a check, if both sets contain the same colliders
+            if (std::ranges::all_of(broadphase_collisions, [&bruteforce_collisions](const auto& pair) {
+                return std::ranges::any_of(bruteforce_collisions, [&pair](const auto& other) {
+                    return pair.contains(other.collider_1) && pair.contains(other.collider_2);
+                });
+            })) {
+                return;
+            }
+        }
+
+        // Stop the object moving and rotating
+        // rotate_and_move_objects = false;
+
+        std::cerr << "Bruteforce test failed!" << std::endl;
+        // Print what colliders are colliding in bruteforce
+
+        std::vector<cdlib::CollisionPair> bruteforce_extras;
+        std::vector<cdlib::CollisionPair> extras;
+
+        for (const auto& pair : bruteforce_collisions) {
+            if (!broadphase_collisions.contains(pair)) {
+                bruteforce_extras.push_back(pair);
+            }
+        }
+
+        for (const auto& pair : broadphase_collisions) {
+            if (!bruteforce_collisions.contains(pair)) {
+                extras.push_back(pair);
+            }
+        }
+
+        std::cout << "Bruteforce extra collisions: ";
+        for (const auto& pair : bruteforce_extras) {
+            // Find the colliders in the colliders_vector array and print their indices as A, B, C, ...
+            const auto id1 = static_cast<char>('A' + std::distance(colliders.begin(), std::ranges::find(colliders, pair.collider_1)));
+            const auto id2 = static_cast<char>('A' + std::distance(colliders.begin(), std::ranges::find(colliders, pair.collider_2)));
+            std::cout << "(" << id1 << id2 << "), ";
+        }
+        std::cout << std::endl;
+
+        std::cout << "Extra collisions: ";
+        for (const auto& pair : extras) {
+            // Find the colliders in the colliders_vector array and print their indices as A, B, C, ...
+            const auto id1 = static_cast<char>('A' + std::distance(colliders.begin(), std::ranges::find(colliders, pair.collider_1)));
+            const auto id2 = static_cast<char>('A' + std::distance(colliders.begin(), std::ranges::find(colliders, pair.collider_2)));
+            std::cout << "(" << id1 << id2 << "), ";
+        }
+
+        // Print what colliders are colliding in SAP
+        if (selected_method == SAP) {
+            sap.print_lists();
+        }
+    }
+
+    if (selected_method == GJK_EPA || selected_method == V_CLIP) {
+        auto bruteforce = cdlib::NarrowBruteforce(object_1->collider, object_2->collider);
+        const auto expected_data = bruteforce.get_collision_data();
+        if (expected_data.is_colliding == collision_data.is_colliding)
+        {
+            // If the selected method is V-Clip, check if the features are the same
+            if (selected_method == V_CLIP)
+            {
+                if (collision_data.is_colliding) return; // Don't check the nearest features, since they are not always the same in this case
+
+                auto check_if_features_equal = [](const cdlib::FeatureP& f1, const cdlib::FeatureP& f2) {
+                    if (f1 == nullptr || f2 == nullptr){
+                        return false;
+                    }
+                    if (f1 == f2) return true;
+
+                    // Check if the features are half_edges, if so check if they are potentially twins
+                    if (const auto edge_1 = std::dynamic_pointer_cast<cdlib::HalfEdge>(f1); edge_1 != nullptr){
+                        if (const auto edge_2 = std::dynamic_pointer_cast<cdlib::HalfEdge>(f2); edge_2 != nullptr){
+                            return edge_1->start == edge_2->end && edge_1->end == edge_2->start;
+                        }
+                    }
+
+                    return false;
+                };
+
+                // Check distance difference
+                const auto distance = feature_distance(collision_data.feature_1, collision_data.feature_2);
+                const auto distance_difference = std::abs(distance - expected_data.depth);
+
+                // Check if the features are the same (or swapped), considering half-edge twins
+                if (check_if_features_equal(collision_data.feature_1, expected_data.feature_1) && check_if_features_equal(collision_data.feature_2, expected_data.feature_2) ||
+                   check_if_features_equal(collision_data.feature_1, expected_data.feature_2) && check_if_features_equal(collision_data.feature_2, expected_data.feature_1) ||
+                   distance_difference < 0.001f)
+                {
+                    return;
+                }
+                std::cerr << "Distance difference: " << distance_difference << std::endl;
+                std::cerr << "Got: " << collision_data.feature_1->to_string() << " - " << collision_data.feature_2->to_string() << std::endl;
+                std::cerr << "Expected: " << expected_data.feature_1->to_string() << " - " << expected_data.feature_2->to_string() << std::endl;
+                std::cerr << "Collider 1: " << object_1->collider->get_shape()->get_debug_data() << std::endl;
+                std::cerr << "Collider 2: " << object_2->collider->get_shape()->get_debug_data() << std::endl;
+            }
+            else
+            {
+                return;
+            }
+        }
+
+        // Print-out debug message
+        std::cerr << std::endl << "Bruteforce test failed!" << std::endl;
+        std::cout << "--- Expected data ---" << std::endl;
+        std::cout << "Is colliding: " << "Bruteforce: " << expected_data.is_colliding << "   ResultData: " << collision_data.is_colliding << std::endl;
+        std::cout << std::endl;
+
+        std::cout << "--- Positioning ---" << std::endl;
+        std::cout << "Collider 1:" << std::endl;
+        std::cout << "\tPosition: (" << object_position_1.x << ", " << object_position_1.y << ", " <<  object_position_1.z << ")" << std::endl;
+        std::cout << "\tRotation: (" << object_rotation_1.x << ", " << object_rotation_1.y << ", " <<  object_rotation_1.z << ")" << std::endl;
+
+        std::cout << "Collider 2:" << std::endl;
+        std::cout << "\tPosition: (" << object_position_2.x << ", " << object_position_2.y << ", " <<  object_position_2.z << ")" << std::endl;
+        std::cout << "\tRotation: (" << object_rotation_2.x << ", " << object_rotation_2.y << ", " <<  object_rotation_2.z << ")" << std::endl;
+        std::cout << std::endl;
+    }
 }
 
 

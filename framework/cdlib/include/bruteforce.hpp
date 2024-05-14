@@ -39,7 +39,7 @@ namespace cdlib{
 
         CollisionData get_collision_data() override;
 
-        static std::set<RayCastResult> raycast(const Ray& ray, const std::set<ColliderP>& colliders);
+        static RayCastResultSet raycast(const Ray& ray, const std::set<ColliderP>& colliders);
         static RayCastResult raycast(const Ray& ray, const ColliderP& collider);
     };
 
@@ -78,6 +78,6 @@ namespace cdlib{
 
         [[nodiscard]] CollisionSet get_collisions() override;
 
-        [[nodiscard]] std::set<ColliderP> raycast(const Ray& ray) override;
+        [[nodiscard]] RayCastResultSet raycast(const Ray& ray) override;
     };
 }

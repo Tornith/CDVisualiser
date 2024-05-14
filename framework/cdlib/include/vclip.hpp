@@ -215,7 +215,7 @@ namespace cdlib{
 
         [[nodiscard]] bool debug_brute_force(bool should_collide, const FeatureP& expected_feature_1, const FeatureP& expected_feature_2) const;
 
-        static CollisionData raycast(const Ray& ray, const ColliderP& collider);
+        static RayCastResult raycast(const Ray& ray, const ColliderP& collider);
     };
 
     [[nodiscard]] ClipData clip_edge(const HalfEdgeP& clipped_edge, const FeatureP& feature);
@@ -322,13 +322,13 @@ namespace cdlib{
         [[nodiscard]] Ray clip_ray_against_aabb(const ColliderP& collider) {
             // Clip the ray against the AABB of the collider
             const auto aabb_raycast = collider->get_aabb().raycast(ray);
-            if (!aabb_raycast.has_value()){
+            if (!aabb_raycast.hit){
                 state = DONE;
                 return ray;
             }
 
             // We create a new ray with the clipped t values
-            const auto clipped_ray = ray.clip(aabb_raycast.value().first, aabb_raycast.value().second);
+            const auto clipped_ray = ray.clip(aabb_raycast.t_min, aabb_raycast.t_max);
             return clipped_ray;
         }
     };

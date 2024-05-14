@@ -88,7 +88,7 @@ namespace cdlib {
         [[nodiscard]] CollisionData get_collision_data() override;
         [[nodiscard]] virtual CollisionData calculate_collision_data();
 
-        static CollisionData raycast(const Ray& ray, const ColliderP& collider);
+        static RayCastResult raycast(const Ray& ray, const ColliderP& collider);
     };
 
     class GJKEPA : public GJK {
@@ -106,7 +106,7 @@ namespace cdlib {
 
         [[nodiscard]] CollisionData calculate_collision_data() override;
 
-        static CollisionData raycast(const Ray& ray, const ColliderP& collider);
+        static RayCastResult raycast(const Ray& ray, const ColliderP& collider);
     };
 
     class SteppableGJK : public GJK {

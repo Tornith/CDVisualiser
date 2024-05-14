@@ -354,7 +354,7 @@ namespace cdlib {
         }
     }
 
-    std::set<ColliderP> SAP::raycast(const Ray& ray) {
+    RayCastResultSet SAP::raycast(const Ray& ray) {
         const auto start = ray.from();
         const auto end = ray.to();
 
@@ -367,11 +367,21 @@ namespace cdlib {
 
         // Walk the list of endpoints
         auto current = list_heads[axis];
-        std::set<ColliderP> colliders;
+        RayCastResultSet colliders;
         while (current != nullptr && current->value[axis] < ray_aabb.max[axis]) {
             // Check if the ray intersects the AABB of the endpoint
-            if (current->is_min && current->get_aabb().raycast(start, end, 0.0f, 1.0f).has_value()) {
-                colliders.insert(current->collider);
+            if (current->is_min) {
+                const auto raycast = current->get_aabb().raycast(start, end, 0.0f, 1.0f);
+                if (raycast.hit) {
+                    const auto point = ray.at(raycast.t_min);
+                    colliders.insert({
+                        true,
+                        current->collider,
+                        point,
+                        raycast.t_min_normal,
+                        distance(ray.from(), point)
+                    });
+                }
             }
 
             // Move to the next endpoint

@@ -107,7 +107,7 @@ namespace cdlib {
         void query_aabb(const AABB& aabb, const QueryCallback& callback);
         void query_ray(const AABBTreeRaycast& input, const RayCallback& callback);
 
-        [[nodiscard]] std::set<ColliderP> raycast(const Ray& ray) override;
+        [[nodiscard]] RayCastResultSet raycast(const Ray& ray) override;
 
     private:
         std::shared_ptr<Node> create_node(const ColliderP& collider);

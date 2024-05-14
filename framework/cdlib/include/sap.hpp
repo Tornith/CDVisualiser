@@ -50,7 +50,7 @@ namespace cdlib {
 
         [[nodiscard]] CollisionSet get_collisions() override;
 
-        [[nodiscard]] std::set<ColliderP> raycast(const Ray& ray) override;
+        [[nodiscard]] RayCastResultSet raycast(const Ray& ray) override;
 
         // Debug print lists
         void print_lists() const;

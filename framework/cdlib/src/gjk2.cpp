@@ -207,19 +207,19 @@ namespace cdlib
         return GJKState::COLLISION;
     }
 
-    CollisionData GJK::raycast(const Ray& ray, const ColliderP& collider) {
+    RayCastResult GJK::raycast(const Ray& ray, const ColliderP& collider) {
         // Clip the ray against the AABB of the collider
         const auto aabb_raycast = collider->get_aabb().raycast(ray);
-        if (!aabb_raycast.has_value()){
+        if (!aabb_raycast.hit){
             return {false};
         }
 
         // We create a new ray with the clipped t values
-        const auto clipped_ray = ray.clip(aabb_raycast.value().first, aabb_raycast.value().second);
+        const auto clipped_ray = ray.clip(aabb_raycast.t_min, aabb_raycast.t_max);
 
         auto ray_collider = std::make_shared<RayCollider>(clipped_ray);
         auto gjk = GJK(collider, ray_collider);
-        return gjk.get_collision_data();
+        return RayCastResult{gjk.get_collision_data().is_colliding};
     }
 
     /********************
@@ -241,10 +241,22 @@ namespace cdlib
         return epa.get_collision_data();
     }
 
-    CollisionData GJKEPA::raycast(const Ray& ray, const ColliderP& collider) {
-        auto ray_collider = std::make_shared<RayCollider>(ray);
+    RayCastResult GJKEPA::raycast(const Ray& ray, const ColliderP& collider) {
+        // Clip the ray against the AABB of the collider
+        const auto aabb_raycast = collider->get_aabb().raycast(ray);
+        if (!aabb_raycast.hit){
+            return {false};
+        }
+
+        // We create a new ray with the clipped t values
+        const auto clipped_ray = ray.clip(aabb_raycast.t_min, aabb_raycast.t_max);
+
+        auto ray_collider = std::make_shared<RayCollider>(clipped_ray);
         auto gjk = GJKEPA(collider, ray_collider);
-        return gjk.get_collision_data();
+        const auto data = gjk.get_collision_data();
+
+        // Collision point is
+        return RayCastResult{data.is_colliding};
     }
 
     /********************

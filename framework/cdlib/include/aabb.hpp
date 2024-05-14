@@ -1,11 +1,18 @@
 #pragma once
 #include <optional>
 #include <glm/vec3.hpp>
-#include <glm/ext/scalar_common.hpp>
 
 #include "ray.hpp"
 
 namespace cdlib {
+    struct AABBRayCastResult {
+        bool hit;
+        float t_min;
+        float t_max;
+        glm::vec3 t_min_normal;
+        glm::vec3 t_max_normal;
+    };
+
     struct AABB {
         glm::vec3 min;
         glm::vec3 max;
@@ -53,9 +60,12 @@ namespace cdlib {
             return {glm::min(min, point), glm::max(max, point)};
         }
 
-        [[nodiscard]] std::optional<std::pair<float, float>> raycast(const glm::vec3& from, const glm::vec3& to, float t_min, float t_max) const {
+        [[nodiscard]] AABBRayCastResult raycast(const glm::vec3& from, const glm::vec3& to, float t_min, float t_max) const {
             const auto direction = to - from;
             const auto inv_direction = 1.0f / direction;
+
+            auto t_min_axis = -1;
+            auto t_max_axis = -1;
 
             for (auto axis = 0; axis < 3; ++axis) {
                 auto t0 = (min[axis] - from[axis]) * inv_direction[axis];
@@ -65,18 +75,49 @@ namespace cdlib {
                     std::swap(t0, t1);
                 }
 
-                t_min = glm::max(t0, t_min);
-                t_max = glm::min(t1, t_max);
+                if (t0 > t_min) {
+                    t_min = t0;
+                    t_min_axis = axis;
+                }
+
+                if (t1 < t_max) {
+                    t_max = t1;
+                    t_max_axis = axis;
+                }
 
                 if (t_max <= t_min) {
-                    return std::nullopt;
+                    return {
+                        false,
+                        std::numeric_limits<float>::max(),
+                        std::numeric_limits<float>::max(),
+                        glm::vec3(0.0f),
+                        glm::vec3(0.0f)
+                    };
                 }
             }
 
-            return std::make_pair(t_min, t_max);
+            // Check if we have encountered a hit
+            if (t_min_axis == -1 || t_max_axis == -1) {
+                return {
+                    false,
+                    t_min,
+                    t_max,
+                    glm::vec3(0.0f),
+                    glm::vec3(0.0f)
+                };
+            }
+
+            // Convert axes to normals
+            auto t_min_normal = glm::vec3(0.0f);
+            auto t_max_normal = glm::vec3(0.0f);
+
+            t_min_normal[t_min_axis] = direction[t_min_axis] < 0.0f ? 1.0f : -1.0f;
+            t_max_normal[t_max_axis] = direction[t_max_axis] < 0.0f ? 1.0f : -1.0f;
+
+            return {true, t_min, t_max, t_min_normal, t_max_normal};
         }
 
-        [[nodiscard]] std::optional<std::pair<float, float>> raycast(const Ray& ray) const {
+        [[nodiscard]] AABBRayCastResult raycast(const Ray& ray) const {
             return raycast(ray.from(), ray.to(), 0.0f, 1.0f);
         }
 
